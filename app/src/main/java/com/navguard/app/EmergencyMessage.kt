@@ -22,18 +22,6 @@ data class EmergencyMessage(
         RELAY
     }
     
-    constructor(content: String, type: MessageType) : this(
-        content = content,
-        type = type
-    )
-    
-    constructor(content: String, type: MessageType, latitude: Double, longitude: Double) : this(
-        content = content,
-        type = type,
-        latitude = latitude,
-        longitude = longitude
-    )
-    
     fun hasLocation(): Boolean = latitude != 0.0 && longitude != 0.0
     
     fun getFormattedTimestamp(): String {

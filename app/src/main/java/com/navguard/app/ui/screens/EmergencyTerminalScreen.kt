@@ -349,7 +349,10 @@ private fun sendRegularMessage(
     message: String,
     onMessageSent: (EmergencyMessage) -> Unit
 ) {
-    val emergencyMessage = EmergencyMessage(message, EmergencyMessage.MessageType.REGULAR)
+    val emergencyMessage = EmergencyMessage(
+        content = message,
+        type = EmergencyMessage.MessageType.REGULAR
+    )
     onMessageSent(emergencyMessage)
 }
 
@@ -362,13 +365,21 @@ private fun sendEmergencyMessage(
 ) {
     locationManager.getCurrentLocation(object : LocationManager.LocationCallback {
         override fun onLocationReceived(latitude: Double, longitude: Double) {
-            val emergencyMessage = EmergencyMessage(message, EmergencyMessage.MessageType.EMERGENCY, latitude, longitude)
+            val emergencyMessage = EmergencyMessage(
+                content = message,
+                type = EmergencyMessage.MessageType.EMERGENCY,
+                latitude = latitude,
+                longitude = longitude
+            )
             onMessageSent(emergencyMessage)
             onLocationUpdate(latitude, longitude)
         }
         
         override fun onLocationError(error: String) {
-            val emergencyMessage = EmergencyMessage(message, EmergencyMessage.MessageType.EMERGENCY)
+            val emergencyMessage = EmergencyMessage(
+                content = message,
+                type = EmergencyMessage.MessageType.EMERGENCY
+            )
             onMessageSent(emergencyMessage)
             onStatusUpdate("Emergency sent without GPS: $error")
         }
@@ -390,7 +401,12 @@ private fun triggerSosAlert(
     locationManager.getCurrentLocation(object : LocationManager.LocationCallback {
         override fun onLocationReceived(latitude: Double, longitude: Double) {
             val sosMessage = "🚨 SOS ALERT 🚨 Emergency assistance needed immediately!"
-            val sosMsg = EmergencyMessage(sosMessage, EmergencyMessage.MessageType.SOS, latitude, longitude)
+            val sosMsg = EmergencyMessage(
+                content = sosMessage,
+                type = EmergencyMessage.MessageType.SOS,
+                latitude = latitude,
+                longitude = longitude
+            )
             onMessageSent(sosMsg)
             onLocationUpdate(latitude, longitude)
             onStatusUpdate("SOS alert sent with GPS coordinates")
@@ -398,7 +414,10 @@ private fun triggerSosAlert(
         
         override fun onLocationError(error: String) {
             val sosMessage = "🚨 SOS ALERT 🚨 Emergency assistance needed immediately!"
-            val sosMsg = EmergencyMessage(sosMessage, EmergencyMessage.MessageType.SOS)
+            val sosMsg = EmergencyMessage(
+                content = sosMessage,
+                type = EmergencyMessage.MessageType.SOS
+            )
             onMessageSent(sosMsg)
             onStatusUpdate("SOS alert sent without GPS: $error")
         }

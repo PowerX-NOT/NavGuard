@@ -238,15 +238,14 @@ public class EmergencyTerminalFragment extends Fragment implements ServiceConnec
     }
     
     private void sendEmergencyMessage(String message) {
-        if (message.trim().isEmpty()) {
-            message = "EMERGENCY: Need immediate assistance!";
-        }
+        final String finalMessage = message.trim().isEmpty() ? 
+            "EMERGENCY: Need immediate assistance!" : message;
         
         // Get current location for emergency message
         locationManager.getCurrentLocation(new LocationManager.LocationCallback() {
             @Override
             public void onLocationReceived(double latitude, double longitude) {
-                EmergencyMessage emergencyMessage = new EmergencyMessage(message, EmergencyMessage.MessageType.EMERGENCY, latitude, longitude);
+                EmergencyMessage emergencyMessage = new EmergencyMessage(finalMessage, EmergencyMessage.MessageType.EMERGENCY, latitude, longitude);
                 sendMessage(emergencyMessage);
                 updateLocationDisplay(latitude, longitude);
             }
@@ -254,7 +253,7 @@ public class EmergencyTerminalFragment extends Fragment implements ServiceConnec
             @Override
             public void onLocationError(String error) {
                 // Send emergency message without location
-                EmergencyMessage emergencyMessage = new EmergencyMessage(message, EmergencyMessage.MessageType.EMERGENCY);
+                EmergencyMessage emergencyMessage = new EmergencyMessage(finalMessage, EmergencyMessage.MessageType.EMERGENCY);
                 sendMessage(emergencyMessage);
                 status("Emergency sent without GPS: " + error);
             }

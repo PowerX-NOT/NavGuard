@@ -4,6 +4,7 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -44,7 +45,7 @@ fun DevicesScreen(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
-            refreshDevices(bluetoothAdapter) { deviceList, missing ->
+            refreshDevices(bluetoothAdapter, context) { deviceList, missing ->
                 devices = deviceList
                 permissionMissing = missing
             }
@@ -54,7 +55,7 @@ fun DevicesScreen(
     }
     
     LaunchedEffect(Unit) {
-        refreshDevices(bluetoothAdapter) { deviceList, missing ->
+        refreshDevices(bluetoothAdapter, context) { deviceList, missing ->
             devices = deviceList
             permissionMissing = missing
         }
@@ -70,6 +71,11 @@ fun DevicesScreen(
                             onClick = {
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                                     permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                                } else {
+                                    refreshDevices(bluetoothAdapter, context) { deviceList, missing ->
+                                        devices = deviceList
+                                        permissionMissing = missing
+                                    }
                                 }
                             }
                         ) {
@@ -218,6 +224,7 @@ fun DeviceItem(
 @SuppressLint("MissingPermission")
 private fun refreshDevices(
     bluetoothAdapter: BluetoothAdapter?,
+    context: Context,
     onResult: (List<BluetoothDevice>, Boolean) -> Unit
 ) {
     val devices = mutableListOf<BluetoothDevice>()
@@ -225,9 +232,10 @@ private fun refreshDevices(
     
     if (bluetoothAdapter != null) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // Check for BLUETOOTH_CONNECT permission on Android 12+
-            // This would need to be handled in the actual implementation
-            permissionMissing = false // Simplified for this example
+            permissionMissing = ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.BLUETOOTH_CONNECT
+            ) != PackageManager.PERMISSION_GRANTED
         }
         
         if (!permissionMissing && bluetoothAdapter.isEnabled) {

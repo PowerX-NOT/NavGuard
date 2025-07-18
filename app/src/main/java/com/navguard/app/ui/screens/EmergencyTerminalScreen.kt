@@ -5,6 +5,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.os.IBinder
 import android.os.Vibrator
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -35,11 +37,13 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.navguard.app.EmergencyMessage
 import com.navguard.app.LocationManager
+import com.navguard.app.SerialSocket
 import com.navguard.app.SerialListener
 import com.navguard.app.SerialService
 import com.navguard.app.ui.theme.*
 import kotlinx.coroutines.delay
 import java.util.*
+import java.io.IOException
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +62,10 @@ fun EmergencyTerminalScreen(
     var sosPressed by remember { mutableStateOf(false) }
     var sosCountdown by remember { mutableStateOf(0) }
     
+    // Bluetooth connection state
+    var service: SerialService? by remember { mutableStateOf(null) }
+    var socket: SerialSocket? by remember { mutableStateOf(null) }
+    
     val listState = rememberLazyListState()
     val locationManager = remember { LocationManager(context) }
     val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator }
@@ -67,6 +75,109 @@ fun EmergencyTerminalScreen(
     ) { granted ->
         if (!granted) {
             connectionStatus = "Location permission denied"
+        }
+    }
+    
+    // Serial listener for handling Bluetooth communication
+    val serialListener = remember {
+        object : SerialListener {
+            override fun onSerialConnect() {
+                isConnected = true
+                connectionStatus = "Connected to device"
+            }
+            
+            override fun onSerialConnectError(e: Exception) {
+                isConnected = false
+                connectionStatus = "Connection failed: ${e.message}"
+            }
+            
+            override fun onSerialRead(data: ByteArray) {
+                val receivedText = String(data)
+                // Parse received emergency message
+                parseReceivedMessage(receivedText)?.let { msg ->
+                    messages = messages + MessageDisplay(msg, false)
+                }
+            }
+            
+            override fun onSerialRead(datas: ArrayDeque<ByteArray>) {
+                val sb = StringBuilder()
+                for (data in datas) {
+                    sb.append(String(data))
+                }
+                parseReceivedMessage(sb.toString())?.let { msg ->
+                    messages = messages + MessageDisplay(msg, false)
+                }
+            }
+            
+            override fun onSerialIoError(e: Exception) {
+                isConnected = false
+                connectionStatus = "Connection lost: ${e.message}"
+            }
+        }
+    }
+    
+    // Service connection
+    val serviceConnection = remember {
+        object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+                service = (binder as SerialService.SerialBinder).getService()
+                service?.attach(serialListener)
+                connectionStatus = "Service connected"
+            }
+            
+            override fun onServiceDisconnected(name: ComponentName) {
+                service = null
+                connectionStatus = "Service disconnected"
+            }
+        }
+    }
+    
+    // Connect to Bluetooth device on screen load
+    LaunchedEffect(deviceAddress) {
+        try {
+            // Bind to service
+            val intent = Intent(context, SerialService::class.java)
+            context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
+            
+            // Get Bluetooth device and create socket
+            val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+            if (bluetoothAdapter != null && bluetoothAdapter.isEnabled) {
+                val device = bluetoothAdapter.getRemoteDevice(deviceAddress)
+                socket = SerialSocket(context.applicationContext, device)
+                
+                // Wait for service to be connected before attempting connection
+                delay(1000)
+                
+                service?.let { svc ->
+                    socket?.let { sock ->
+                        try {
+                            svc.connect(sock)
+                        } catch (e: Exception) {
+                            connectionStatus = "Connection failed: ${e.message}"
+                        }
+                        connectionStatus = "Connecting to ${device.name ?: deviceAddress}..."
+                    }
+                } ?: run {
+                    connectionStatus = "Service not ready"
+                }
+            } else {
+                connectionStatus = "Bluetooth not available"
+            }
+        } catch (e: Exception) {
+            connectionStatus = "Connection error: ${e.message}"
+        }
+    }
+    
+    // Cleanup on dispose
+    DisposableEffect(Unit) {
+        onDispose {
+            service?.disconnect()
+            service?.detach()
+            try {
+                context.unbindService(serviceConnection)
+            } catch (e: Exception) {
+                // Service might already be unbound
+            }
         }
     }
     
@@ -82,6 +193,7 @@ fun EmergencyTerminalScreen(
                 triggerSosAlert(
                     locationManager = locationManager,
                     vibrator = vibrator,
+                    service = service,
                     onLocationUpdate = { lat, lon ->
                         locationText = "GPS: ${"%.6f".format(lat)}, ${"%.6f".format(lon)}"
                     },
@@ -200,6 +312,7 @@ fun EmergencyTerminalScreen(
                                 if (messageText.isNotBlank()) {
                                     sendRegularMessage(
                                         message = messageText,
+                                        service = service,
                                         onMessageSent = { msg ->
                                             messages = messages + MessageDisplay(msg, true)
                                             messageText = ""
@@ -225,6 +338,7 @@ fun EmergencyTerminalScreen(
                             onClick = {
                                 sendEmergencyMessage(
                                     message = messageText.ifBlank { "EMERGENCY: Need immediate assistance!" },
+                                    service = service,
                                     locationManager = locationManager,
                                     onLocationUpdate = { lat, lon ->
                                         locationText = "GPS: ${"%.6f".format(lat)}, ${"%.6f".format(lon)}"
@@ -347,17 +461,28 @@ data class MessageDisplay(
 
 private fun sendRegularMessage(
     message: String,
+    service: SerialService?,
     onMessageSent: (EmergencyMessage) -> Unit
 ) {
     val emergencyMessage = EmergencyMessage(
         content = message,
         type = EmergencyMessage.MessageType.REGULAR
     )
+    
+    // Send via Bluetooth
+    try {
+        val messageData = formatMessageForTransmission(emergencyMessage)
+        service?.write(messageData.toByteArray())
+    } catch (e: IOException) {
+        // Handle send error
+    }
+    
     onMessageSent(emergencyMessage)
 }
 
 private fun sendEmergencyMessage(
     message: String,
+    service: SerialService?,
     locationManager: LocationManager,
     onLocationUpdate: (Double, Double) -> Unit,
     onMessageSent: (EmergencyMessage) -> Unit,
@@ -371,6 +496,15 @@ private fun sendEmergencyMessage(
                 latitude = latitude,
                 longitude = longitude
             )
+            
+            // Send via Bluetooth
+            try {
+                val messageData = formatMessageForTransmission(emergencyMessage)
+                service?.write(messageData.toByteArray())
+            } catch (e: IOException) {
+                // Handle send error
+            }
+            
             onMessageSent(emergencyMessage)
             onLocationUpdate(latitude, longitude)
         }
@@ -380,6 +514,15 @@ private fun sendEmergencyMessage(
                 content = message,
                 type = EmergencyMessage.MessageType.EMERGENCY
             )
+            
+            // Send via Bluetooth
+            try {
+                val messageData = formatMessageForTransmission(emergencyMessage)
+                service?.write(messageData.toByteArray())
+            } catch (e: IOException) {
+                // Handle send error
+            }
+            
             onMessageSent(emergencyMessage)
             onStatusUpdate("Emergency sent without GPS: $error")
         }
@@ -389,6 +532,7 @@ private fun sendEmergencyMessage(
 private fun triggerSosAlert(
     locationManager: LocationManager,
     vibrator: Vibrator,
+    service: SerialService?,
     onLocationUpdate: (Double, Double) -> Unit,
     onMessageSent: (EmergencyMessage) -> Unit,
     onStatusUpdate: (String) -> Unit
@@ -407,6 +551,15 @@ private fun triggerSosAlert(
                 latitude = latitude,
                 longitude = longitude
             )
+            
+            // Send via Bluetooth
+            try {
+                val messageData = formatMessageForTransmission(sosMsg)
+                service?.write(messageData.toByteArray())
+            } catch (e: IOException) {
+                // Handle send error
+            }
+            
             onMessageSent(sosMsg)
             onLocationUpdate(latitude, longitude)
             onStatusUpdate("SOS alert sent with GPS coordinates")
@@ -418,6 +571,15 @@ private fun triggerSosAlert(
                 content = sosMessage,
                 type = EmergencyMessage.MessageType.SOS
             )
+            
+            // Send via Bluetooth
+            try {
+                val messageData = formatMessageForTransmission(sosMsg)
+                service?.write(messageData.toByteArray())
+            } catch (e: IOException) {
+                // Handle send error
+            }
+            
             onMessageSent(sosMsg)
             onStatusUpdate("SOS alert sent without GPS: $error")
         }
@@ -433,4 +595,31 @@ private fun hasLocationPermission(context: Context): Boolean {
 
 private fun isBluetoothEnabled(): Boolean {
     return android.bluetooth.BluetoothAdapter.getDefaultAdapter()?.isEnabled == true
+}
+
+private fun formatMessageForTransmission(message: EmergencyMessage): String {
+    return "${message.type.name}|${message.content}|${message.latitude}|${message.longitude}|${message.timestamp}"
+}
+
+private fun parseReceivedMessage(data: String): EmergencyMessage? {
+    return try {
+        val parts = data.trim().split("|")
+        if (parts.size >= 5) {
+            EmergencyMessage(
+                content = parts[1],
+                type = EmergencyMessage.MessageType.valueOf(parts[0]),
+                latitude = parts[2].toDoubleOrNull() ?: 0.0,
+                longitude = parts[3].toDoubleOrNull() ?: 0.0,
+                timestamp = parts[4].toLongOrNull() ?: System.currentTimeMillis()
+            )
+        } else {
+            // Fallback for simple text messages
+            EmergencyMessage(
+                content = data,
+                type = EmergencyMessage.MessageType.REGULAR
+            )
+        }
+    } catch (e: Exception) {
+        null
+    }
 }

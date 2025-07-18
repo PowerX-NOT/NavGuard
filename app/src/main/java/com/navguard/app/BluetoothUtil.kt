@@ -93,10 +93,11 @@ object BluetoothUtil {
     fun onPermissionsResult(fragment: Fragment, granted: Boolean, cb: PermissionGrantedCallback) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) return
         
-        val showRationale = fragment.shouldShowRequestPermissionRationale(Manifest.permission.BLUETOOTH_CONNECT)
         when {
             granted -> cb.call()
-            showRationale -> showRationaleDialog(fragment) { _, _ -> cb.call() }
+            fragment.shouldShowRequestPermissionRationale(Manifest.permission.BLUETOOTH_CONNECT) -> {
+                showRationaleDialog(fragment) { _, _ -> cb.call() }
+            }
             else -> showSettingsDialog(fragment)
         }
     }

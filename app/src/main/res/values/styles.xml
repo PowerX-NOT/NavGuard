@@ -1,10 +1,11 @@
 <resources>
-    <!-- Base application theme using Material 3 -->
-    <style name="AppTheme" parent="Theme.Material3.DayNight.NoActionBar">
+    <!-- Base application theme using Material Design Components -->
+    <style name="AppTheme" parent="Theme.Material3.DayNight">
         <item name="colorPrimary">@color/colorPrimary</item>
+        <item name="colorPrimaryVariant">@color/colorPrimaryDark</item>
         <item name="colorOnPrimary">@android:color/white</item>
-        <item name="colorPrimaryContainer">@color/colorPrimaryDark</item>
         <item name="colorSecondary">@color/colorAccent</item>
         <item name="colorOnSecondary">@android:color/white</item>
+        <item name="android:statusBarColor">@color/colorPrimaryDark</item>
     </style>
 </resources>

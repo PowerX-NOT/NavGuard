@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">LoRa Emergency Communicator</string>
+    <string name="app_name">NavGuard</string>
     <string name="devices">Emergency Devices</string>
     <string name="emergency_message">Emergency Message</string>
     <string name="send_emergency">Send Emergency</string>

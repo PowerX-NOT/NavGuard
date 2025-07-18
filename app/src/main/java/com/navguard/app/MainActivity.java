@@ -1,4 +1,4 @@
-package de.kai_morich.simple_bluetooth_terminal;
+package com.navguard.app;
 
 import android.os.Bundle;
 import androidx.fragment.app.FragmentManager;

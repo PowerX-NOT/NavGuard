@@ -1,6 +1,6 @@
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/a3d8a40d7133497caa11051eaac6f1a2)](https://www.codacy.com/manual/kai-morich/SimpleBluetoothTerminal?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=kai-morich/SimpleBluetoothTerminal&amp;utm_campaign=Badge_Grade)
 
-# LoRa Emergency Communication System
+# NavGuard
 
 This Android app provides an emergency communication interface for IoT devices using LoRa, Bluetooth, and Arduino microcontrollers to enable offline communication in areas without mobile network or internet connectivity.
 
@@ -40,7 +40,7 @@ This Android app provides an emergency communication interface for IoT devices u
 
 ## Usage
 
-1. Pair your Android device with the LoRa emergency device via Bluetooth
+1. Pair your Android device with the NavGuard emergency device via Bluetooth
 2. Use the app to send regular messages or emergency alerts
 3. Hold the SOS button for 5 seconds to trigger automatic emergency alert with GPS
 4. Messages are transmitted via LoRa to other devices in range (10-15km)
@@ -72,7 +72,7 @@ This project is adapted from the SimpleBluetoothTerminal by Kai Morich, extendin
 #### 1. Clone or Download the Project
 ```bash
 git clone <repository-url>
-cd LoRaEmergencyCommunicator
+cd NavGuard
 ```
 Or download the ZIP file and extract it to your desired location.
 
@@ -108,7 +108,7 @@ Or download the ZIP file and extract it to your desired location.
 **Option B: Using Command Line**
 ```bash
 # Navigate to project root directory
-cd /path/to/LoRaEmergencyCommunicator
+cd /path/to/NavGuard
 
 # For Windows
 gradlew.bat build
@@ -192,7 +192,7 @@ After installation, the app will request the following permissions:
 - Test outdoors for better GPS signal
 
 **App crashes on startup:**
-- Check device logs: `adb logcat | grep LoRaEmergency`
+- Check device logs: `adb logcat | grep NavGuard`
 - Ensure minimum Android version (API 18 / Android 4.3)
 
 ### Development Environment Setup

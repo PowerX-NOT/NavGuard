@@ -11,6 +11,7 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.Build;
 import android.os.Bundle;
+import android.annotation.SuppressLint;
 import android.os.IBinder;
 import android.text.Editable;
 import android.text.Spannable;

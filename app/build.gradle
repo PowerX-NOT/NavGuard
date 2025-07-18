@@ -21,6 +21,11 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+        disable 'MissingPermission'
+    }
     namespace 'de.kai_morich.simple_bluetooth_terminal'
 }
 

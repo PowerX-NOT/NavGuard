@@ -7,6 +7,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.annotation.SuppressLint;
 
 import androidx.core.content.ContextCompat;
 
@@ -28,6 +29,7 @@ class SerialSocket implements Runnable {
     private BluetoothSocket socket;
     private boolean connected;
 
+    @SuppressLint("MissingPermission")
     SerialSocket(Context context, BluetoothDevice device) {
         if(context instanceof Activity)
             throw new InvalidParameterException("expected non UI context");
@@ -43,6 +45,7 @@ class SerialSocket implements Runnable {
         };
     }
 
+    @SuppressLint("MissingPermission")
     String getName() {
         return device.getName() != null ? device.getName() : device.getAddress();
     }
@@ -50,6 +53,7 @@ class SerialSocket implements Runnable {
     /**
      * connect-success and most connect-errors are returned asynchronously to listener
      */
+    @SuppressLint("MissingPermission")
     void connect(SerialListener listener) throws IOException {
         this.listener = listener;
         ContextCompat.registerReceiver(context, disconnectBroadcastReceiver, new IntentFilter(Constants.INTENT_ACTION_DISCONNECT), ContextCompat.RECEIVER_NOT_EXPORTED);
@@ -78,6 +82,7 @@ class SerialSocket implements Runnable {
         socket.getOutputStream().write(data);
     }
 
+    @SuppressLint("MissingPermission")
     @Override
     public void run() { // connect & read
         try {

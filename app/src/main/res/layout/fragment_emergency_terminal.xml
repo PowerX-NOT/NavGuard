@@ -16,25 +16,25 @@
         android:padding="8dp"
         android:layout_marginBottom="8dp">
         
-        <TextView
+        <com.google.android.material.textview.MaterialTextView
             android:id="@+id/status_text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Status: Initializing..."
             android:textColor="@android:color/white"
-            android:textSize="12sp" />
+            android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
             
-        <TextView
+        <com.google.android.material.textview.MaterialTextView
             android:id="@+id/location_text"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="GPS: Not available"
             android:textColor="@android:color/white"
-            android:textSize="12sp" />
+            android:textAppearance="@style/TextAppearance.Material3.BodySmall" />
     </LinearLayout>
 
     <!-- Message Display Area -->
-    <TextView
+    <com.google.android.material.textview.MaterialTextView
         android:id="@+id/receive_text"
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -42,13 +42,13 @@
         android:freezesText="true"
         android:gravity="bottom"
         android:scrollbars="vertical"
-        android:textAppearance="@style/TextAppearance.AppCompat.Medium"
+        android:textAppearance="@style/TextAppearance.Material3.BodyLarge"
         android:background="@android:color/black"
         android:padding="8dp" />
 
     <View
         android:layout_width="match_parent"
-        android:background="?android:attr/listDivider"
+        android:background="?attr/colorOutlineVariant"
         android:layout_height="2dp" />
 
     <!-- Message Input Area -->
@@ -58,16 +58,20 @@
         android:orientation="horizontal"
         android:padding="4dp">
 
-        <EditText
-            android:id="@+id/send_text"
+        <com.google.android.material.textfield.TextInputLayout
             android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:inputType="text|textNoSuggestions"
-            android:hint="Type emergency message..."
-            android:singleLine="true" />
+            android:layout_height="wrap_content"
+            android:layout_weight="1">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/send_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text|textNoSuggestions"
+                android:hint="Type emergency message..."
+                android:singleLine="true" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/send_btn"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -83,35 +87,35 @@
         android:orientation="horizontal"
         android:padding="4dp">
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/emergency_btn"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="🚨 EMERGENCY"
-            android:background="@android:color/holo_orange_dark"
+            android:backgroundTint="@android:color/holo_orange_dark"
             android:textColor="@android:color/white"
             android:textStyle="bold"
             android:layout_marginEnd="4dp" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/sos_btn"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="SOS"
-            android:background="@color/colorAccent"
+            android:backgroundTint="@color/colorAccent"
             android:textColor="@android:color/white"
             android:textStyle="bold"
             android:layout_marginStart="4dp" />
     </LinearLayout>
 
     <!-- Instructions -->
-    <TextView
+    <com.google.android.material.textview.MaterialTextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Hold SOS button for 5 seconds to send GPS emergency alert"
-        android:textSize="10sp"
+        android:textAppearance="@style/TextAppearance.Material3.BodySmall"
         android:textColor="@android:color/darker_gray"
         android:gravity="center"
         android:padding="4dp" />

@@ -6,7 +6,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical">
 
-    <TextView
+    <com.google.android.material.textview.MaterialTextView
         android:id="@+id/receive_text"
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -14,31 +14,38 @@
         android:freezesText="true"
         android:gravity="bottom"
         android:scrollbars="vertical"
-        android:textAppearance="@style/TextAppearance.AppCompat.Medium" />
+        android:textAppearance="@style/TextAppearance.Material3.BodyLarge" />
 
     <View
         android:layout_width="match_parent"
-        android:background="?android:attr/listDivider"
+        android:background="?attr/colorOutlineVariant"
         android:layout_height="2dp" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:padding="4dp">
 
-        <EditText
-            android:id="@+id/send_text"
+        <com.google.android.material.textfield.TextInputLayout
             android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:inputType="text|textNoSuggestions"
-            android:singleLine="true" />
+            android:layout_height="wrap_content"
+            android:layout_weight="1">
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/send_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="text|textNoSuggestions"
+                android:singleLine="true" />
+        </com.google.android.material.textfield.TextInputLayout>
 
-        <ImageButton
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/send_btn"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:srcCompat="@drawable/ic_send_white_24dp" />
+            android:icon="@drawable/ic_send_white_24dp"
+            app:iconGravity="textStart"
+            android:text="Send" />
     </LinearLayout>
 
 </LinearLayout>

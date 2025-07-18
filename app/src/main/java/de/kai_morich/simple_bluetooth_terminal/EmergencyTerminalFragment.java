@@ -375,7 +375,12 @@ public class EmergencyTerminalFragment extends Fragment implements ServiceConnec
         
         // Scroll to bottom
         receiveText.post(() -> {
-            receiveText.setSelection(receiveText.getText().length());
+            int scrollAmount = receiveText.getLayout().getLineTop(receiveText.getLineCount()) - receiveText.getHeight();
+            if (scrollAmount > 0) {
+                receiveText.scrollTo(0, scrollAmount);
+            } else {
+                receiveText.scrollTo(0, 0);
+            }
         });
     }
 

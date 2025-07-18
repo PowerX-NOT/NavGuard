@@ -1,8 +1,27 @@
 <resources>
-    <string name="app_name">Simple Bluetooth Terminal</string>
-    <string name="devices">Bluetooth Devices</string>
+    <string name="app_name">LoRa Emergency Communicator</string>
+    <string name="devices">Emergency Devices</string>
+    <string name="emergency_message">Emergency Message</string>
+    <string name="send_emergency">Send Emergency</string>
+    <string name="sos_button">SOS</string>
+    <string name="location_services">Location Services</string>
+    <string name="mesh_network">Mesh Network</string>
+    <string name="device_status">Device Status</string>
+    <string name="gps_coordinates">GPS Coordinates</string>
+    <string name="message_relay">Message Relay</string>
+    <string name="emergency_contacts">Emergency Contacts</string>
 
     <string name="bluetooth_permission_title">Bluetooth permission</string>
     <string name="bluetooth_permission_grant">Bluetooth permission is required by this App. Please grant in next dialog.</string>
     <string name="bluetooth_permission_denied">Bluetooth permission was permanently denied. You have to enable permission \"%s\" in App settings.</string>
+    
+    <string name="location_permission_title">Location permission</string>
+    <string name="location_permission_grant">Location permission is required for GPS functionality. Please grant in next dialog.</string>
+    <string name="location_permission_denied">Location permission was permanently denied. GPS features will not work.</string>
+    
+    <string name="sos_activated">SOS Alert Activated</string>
+    <string name="sos_sending">Sending emergency alert with GPS coordinates...</string>
+    <string name="message_received">Emergency message received</string>
+    <string name="device_paired">Device paired successfully</string>
+    <string name="device_not_paired">Device not paired - buzzer will sound for incoming messages</string>
 </resources>

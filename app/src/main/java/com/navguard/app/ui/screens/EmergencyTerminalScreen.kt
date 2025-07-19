@@ -213,31 +213,65 @@ fun EmergencyTerminalScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Status Bar
-            Card(
+            // Compact Status Bar
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                        shape = RoundedCornerShape(4.dp)
+                    )
                     .padding(8.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
+                // Connection status indicator
+                val isConnectedState = isConnected
+                val statusColor = if (isConnectedState) Color(0xFF4CAF50) else Color(0xFFFF5722)
+                
+                Icon(
+                    imageVector = if (isConnectedState) Icons.Default.Send else Icons.Default.Clear,
+                    contentDescription = null,
+                    tint = statusColor,
+                    modifier = Modifier.size(14.dp)
+                )
+                
+                Text(
+                    text = connectionStatus,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp)
-                ) {
-                    Text(
-                        text = "Status: $connectionStatus",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Text(
-                        text = locationText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
+                        .weight(1f)
+                        .padding(start = 4.dp, end = 8.dp)
+                )
+                
+                // Divider
+                Box(
+                    modifier = Modifier
+                        .height(12.dp)
+                        .width(1.dp)
+                        .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.3f))
+                )
+                
+                // GPS status
+                val hasGps = locationText != "GPS: Not available"
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = null,
+                    tint = if (hasGps) Color(0xFF4CAF50) else Color(0xFFFF9800),
+                    modifier = Modifier
+                        .size(14.dp)
+                        .padding(start = 8.dp)
+                )
+                
+                Text(
+                    text = if (hasGps) locationText.replace("GPS: ", "") else "Awaiting location...",
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.padding(start = 4.dp)
+                )
             }
             
             // Messages Area
@@ -325,7 +359,7 @@ fun EmergencyTerminalScreen(
                                                 service = service,
                                                 locationManager = locationManager,
                                                 onLocationUpdate = { lat, lon ->
-                                                    locationText = "GPS: ${"%.6f".format(lat)}, ${"%.6f".format(lon)}"
+                                                    locationText = "GPS: ${String.format("%.6f°N", lat)}, ${String.format("%.6f°E", lon)}"
                                                 },
                                                 onMessageSent = { msg ->
                                                     messages = messages + MessageDisplay(msg, true)

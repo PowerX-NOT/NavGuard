@@ -12,7 +12,6 @@ import android.os.Vibrator
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -22,13 +21,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -59,8 +59,6 @@ fun EmergencyTerminalScreen(
     var isConnected by remember { mutableStateOf(false) }
     var showDeviceStatus by remember { mutableStateOf(false) }
     var showEmergencyContacts by remember { mutableStateOf(false) }
-    var sosPressed by remember { mutableStateOf(false) }
-    var sosCountdown by remember { mutableStateOf(0) }
     
     // Bluetooth connection state
     var service: SerialService? by remember { mutableStateOf(null) }
@@ -181,32 +179,7 @@ fun EmergencyTerminalScreen(
         }
     }
     
-    // SOS countdown effect
-    LaunchedEffect(sosPressed) {
-        if (sosPressed) {
-            sosCountdown = 5
-            while (sosCountdown > 0 && sosPressed) {
-                delay(1000)
-                sosCountdown--
-            }
-            if (sosPressed && sosCountdown == 0) {
-                triggerSosAlert(
-                    locationManager = locationManager,
-                    vibrator = vibrator,
-                    service = service,
-                    onLocationUpdate = { lat, lon ->
-                        locationText = "GPS: ${"%.6f".format(lat)}, ${"%.6f".format(lon)}"
-                    },
-                    onMessageSent = { message ->
-                        messages = messages + MessageDisplay(message, true)
-                    },
-                    onStatusUpdate = { status ->
-                        connectionStatus = status
-                    }
-                )
-            }
-        }
-    }
+    // Note: SOS countdown effect removed
     
     // Auto-scroll to bottom when new messages arrive
     LaunchedEffect(messages.size) {
@@ -289,111 +262,102 @@ fun EmergencyTerminalScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(8.dp),
-                shape = RoundedCornerShape(0.dp)
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
                 Column(
                     modifier = Modifier.padding(8.dp)
                 ) {
-                    // Text Input Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                    // Enhanced Text Input Row
+                    Column(
+                        modifier = Modifier.fillMaxWidth()
                     ) {
+                        // Text field with send and emergency buttons inside
                         OutlinedTextField(
                             value = messageText,
                             onValueChange = { messageText = it },
-                            modifier = Modifier.weight(1f),
-                            placeholder = { Text("Type emergency message...") },
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                if (messageText.isNotBlank()) {
-                                    sendRegularMessage(
-                                        message = messageText,
-                                        service = service,
-                                        onMessageSent = { msg ->
-                                            messages = messages + MessageDisplay(msg, true)
-                                            messageText = ""
+                            modifier = Modifier
+                                .fillMaxWidth(),
+                            placeholder = { 
+                                Text(
+                                    "Type emergency message...",
+                                    style = MaterialTheme.typography.bodyMedium
+                                ) 
+                            },
+                            shape = RoundedCornerShape(8.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                            ),
+                            singleLine = false,
+                            maxLines = 3,
+                            trailingIcon = {
+                                Row {
+                                    // Regular send button
+                                    IconButton(
+                                        onClick = {
+                                            if (messageText.isNotBlank()) {
+                                                sendRegularMessage(
+                                                    message = messageText,
+                                                    service = service,
+                                                    onMessageSent = { msg ->
+                                                        messages = messages + MessageDisplay(msg, true)
+                                                        messageText = ""
+                                                    }
+                                                )
+                                            }
                                         }
-                                    )
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Send,
+                                            contentDescription = "Send",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    
+                                    // Emergency button with enhanced visibility
+                                    IconButton(
+                                        onClick = {
+                                            sendEmergencyMessage(
+                                                message = messageText.ifBlank { "EMERGENCY: Need immediate assistance!" },
+                                                service = service,
+                                                locationManager = locationManager,
+                                                onLocationUpdate = { lat, lon ->
+                                                    locationText = "GPS: ${"%.6f".format(lat)}, ${"%.6f".format(lon)}"
+                                                },
+                                                onMessageSent = { msg ->
+                                                    messages = messages + MessageDisplay(msg, true)
+                                                    messageText = ""
+                                                },
+                                                onStatusUpdate = { status ->
+                                                    connectionStatus = status
+                                                }
+                                            )
+                                            // Vibrate briefly to confirm emergency button press
+                                            vibrator.vibrate(longArrayOf(0, 150), -1)
+                                        },
+                                        modifier = Modifier
+                                            .background(
+                                                color = Color(0xFFFF4500).copy(alpha = 0.1f),
+                                                shape = RoundedCornerShape(4.dp)
+                                            )
+                                            .padding(horizontal = 4.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Warning,
+                                            contentDescription = "Emergency",
+                                            tint = Color(0xFFFF4500),
+                                            modifier = Modifier.padding(4.dp)
+                                        )
+                                    }
                                 }
                             }
-                        ) {
-                            Icon(Icons.Default.Send, contentDescription = null)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Send")
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    // Emergency Buttons Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                sendEmergencyMessage(
-                                    message = messageText.ifBlank { "EMERGENCY: Need immediate assistance!" },
-                                    service = service,
-                                    locationManager = locationManager,
-                                    onLocationUpdate = { lat, lon ->
-                                        locationText = "GPS: ${"%.6f".format(lat)}, ${"%.6f".format(lon)}"
-                                    },
-                                    onMessageSent = { msg ->
-                                        messages = messages + MessageDisplay(msg, true)
-                                        messageText = ""
-                                    },
-                                    onStatusUpdate = { status ->
-                                        connectionStatus = status
-                                    }
-                                )
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFFFF8C00)
-                            )
-                        ) {
-                            Text("🚨 EMERGENCY", fontWeight = FontWeight.Bold)
-                        }
+                        )
                         
-                        Button(
-                            onClick = { /* SOS handled by gesture */ },
-                            modifier = Modifier
-                                .weight(1f)
-                                .pointerInput(Unit) {
-                                    detectTapGestures(
-                                        onPress = {
-                                            sosPressed = true
-                                            tryAwaitRelease()
-                                            sosPressed = false
-                                            sosCountdown = 0
-                                        }
-                                    )
-                                },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (sosPressed) SOSRed else EmergencyOrange
-                            )
-                        ) {
-                            Text(
-                                text = if (sosPressed) "Hold ($sosCountdown)" else "SOS",
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        // Removed redundant action buttons row
                     }
-                    
-                    // Instructions
-                    Text(
-                        text = "Hold SOS button for 5 seconds to send GPS emergency alert",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 4.dp)
-                    )
                 }
             }
         }
@@ -529,62 +493,7 @@ private fun sendEmergencyMessage(
     })
 }
 
-private fun triggerSosAlert(
-    locationManager: LocationManager,
-    vibrator: Vibrator,
-    service: SerialService?,
-    onLocationUpdate: (Double, Double) -> Unit,
-    onMessageSent: (EmergencyMessage) -> Unit,
-    onStatusUpdate: (String) -> Unit
-) {
-    // Vibrate to indicate SOS activation
-    vibrator.vibrate(longArrayOf(0, 500, 200, 500, 200, 500), -1)
-    
-    onStatusUpdate("🚨 SOS ALERT ACTIVATED 🚨")
-    
-    locationManager.getCurrentLocation(object : LocationManager.LocationCallback {
-        override fun onLocationReceived(latitude: Double, longitude: Double) {
-            val sosMessage = "🚨 SOS ALERT 🚨 Emergency assistance needed immediately!"
-            val sosMsg = EmergencyMessage(
-                content = sosMessage,
-                type = EmergencyMessage.MessageType.SOS,
-                latitude = latitude,
-                longitude = longitude
-            )
-            
-            // Send via Bluetooth
-            try {
-                val messageData = formatMessageForTransmission(sosMsg)
-                service?.write(messageData.toByteArray())
-            } catch (e: IOException) {
-                // Handle send error
-            }
-            
-            onMessageSent(sosMsg)
-            onLocationUpdate(latitude, longitude)
-            onStatusUpdate("SOS alert sent with GPS coordinates")
-        }
-        
-        override fun onLocationError(error: String) {
-            val sosMessage = "🚨 SOS ALERT 🚨 Emergency assistance needed immediately!"
-            val sosMsg = EmergencyMessage(
-                content = sosMessage,
-                type = EmergencyMessage.MessageType.SOS
-            )
-            
-            // Send via Bluetooth
-            try {
-                val messageData = formatMessageForTransmission(sosMsg)
-                service?.write(messageData.toByteArray())
-            } catch (e: IOException) {
-                // Handle send error
-            }
-            
-            onMessageSent(sosMsg)
-            onStatusUpdate("SOS alert sent without GPS: $error")
-        }
-    })
-}
+// SOS alert functionality removed - incorporated into emergency button
 
 private fun hasLocationPermission(context: Context): Boolean {
     return ContextCompat.checkSelfPermission(

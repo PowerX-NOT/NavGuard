@@ -26,14 +26,27 @@ import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.FocusInteraction
 import androidx.core.content.ContextCompat
 import com.navguard.app.EmergencyMessage
 import com.navguard.app.LocationManager
@@ -42,6 +55,8 @@ import com.navguard.app.SerialListener
 import com.navguard.app.SerialService
 import com.navguard.app.ui.theme.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import java.util.*
 import java.io.IOException
 
@@ -67,6 +82,9 @@ fun EmergencyTerminalScreen(
     val listState = rememberLazyListState()
     val locationManager = remember { LocationManager(context) }
     val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator }
+    val focusManager = LocalFocusManager.current
+    val coroutineScope = rememberCoroutineScope()
+    var isInputFocused by remember { mutableStateOf(false) }
     
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -184,6 +202,7 @@ fun EmergencyTerminalScreen(
     // Auto-scroll to bottom when new messages arrive
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
+            delay(50) // Small delay for smoother animation
             listState.animateScrollToItem(messages.size - 1)
         }
     }
@@ -212,11 +231,13 @@ fun EmergencyTerminalScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
+                .statusBarsPadding()
         ) {
-            // Compact Status Bar
+            // Compact Status Bar - Fixed to prevent flickering
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .height(48.dp) // Fixed height to prevent layout shifts
                     .padding(horizontal = 8.dp, vertical = 4.dp)
                     .background(
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
@@ -281,7 +302,18 @@ fun EmergencyTerminalScreen(
                     .weight(1f)
                     .fillMaxWidth()
                     .background(Color.Black)
-                    .padding(8.dp),
+                    .padding(8.dp)
+                    .animateContentSize(
+                        animationSpec = tween(200)
+                    )
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onTap = {
+                                // Dismiss keyboard when tapping on messages area
+                                focusManager.clearFocus()
+                            }
+                        )
+                    },
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(messages) { messageDisplay ->
@@ -291,11 +323,16 @@ fun EmergencyTerminalScreen(
             
             Divider(color = MaterialTheme.colorScheme.outline, thickness = 1.dp)
             
-            // Input Area
+            // Input Area with proper keyboard handling
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(8.dp),
+                    .padding(8.dp)
+                    .imePadding()
+                    .navigationBarsPadding()
+                    .animateContentSize(
+                        animationSpec = tween(300)
+                    ),
                 shape = RoundedCornerShape(12.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
             ) {
@@ -309,7 +346,36 @@ fun EmergencyTerminalScreen(
                         // Text field with send and emergency buttons inside
                         OutlinedTextField(
                             value = messageText,
-                            onValueChange = { messageText = it },
+                            onValueChange = { newText ->
+                                val wasEmpty = messageText.isEmpty()
+                                messageText = newText
+                                // If user just started typing and there are messages, scroll to bottom
+                                if (wasEmpty && newText.isNotEmpty() && messages.isNotEmpty()) {
+                                    coroutineScope.launch {
+                                        delay(100) // Small delay for smooth animation
+                                        listState.animateScrollToItem(messages.size - 1)
+                                    }
+                                }
+                            },
+                            interactionSource = remember { MutableInteractionSource() }.also { source ->
+                                LaunchedEffect(source) {
+                                    source.interactions.collect { interaction ->
+                                        when (interaction) {
+                                            is FocusInteraction.Focus -> {
+                                                isInputFocused = true
+                                                // Smooth scroll when input gets focus
+                                                if (messages.isNotEmpty()) {
+                                                    delay(150) // Delay for keyboard animation
+                                                    listState.animateScrollToItem(messages.size - 1)
+                                                }
+                                            }
+                                            is FocusInteraction.Unfocus -> {
+                                                isInputFocused = false
+                                            }
+                                        }
+                                    }
+                                }
+                            },
                             modifier = Modifier
                                 .fillMaxWidth(),
                             placeholder = { 

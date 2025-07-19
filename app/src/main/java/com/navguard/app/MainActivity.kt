@@ -22,7 +22,8 @@ import com.navguard.app.ui.theme.NavGuardTheme
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Removed enableEdgeToEdge() to prevent header flickering
+        // This allows for smoother keyboard transitions
         
         setContent {
             NavGuardTheme {

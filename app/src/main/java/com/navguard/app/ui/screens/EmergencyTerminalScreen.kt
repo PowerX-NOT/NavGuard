@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.WindowInsets
@@ -301,8 +302,10 @@ fun EmergencyTerminalScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .background(Color.Black)
-                    .padding(8.dp)
+                    .background(
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
+                    )
+                    .padding(vertical = 8.dp)
                     .animateContentSize(
                         animationSpec = tween(200)
                     )
@@ -314,10 +317,72 @@ fun EmergencyTerminalScreen(
                             }
                         )
                     },
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+                verticalArrangement = Arrangement.spacedBy(1.dp)
             ) {
-                items(messages) { messageDisplay ->
-                    MessageItem(messageDisplay)
+                if (messages.isEmpty()) {
+                    item {
+                        // Empty state
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Send,
+                                contentDescription = "No messages",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "No messages yet",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Send a message to start communicating",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    // Group messages by date and show date separators
+                    val groupedMessages = messages.groupBy { getDateOnly(it.message.timestamp) }
+                    groupedMessages.forEach { (date, dayMessages) ->
+                        // Date separator
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp, horizontal = 16.dp),
+                                horizontalArrangement = Arrangement.Center
+                            ) {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                ) {
+                                    Text(
+                                        text = formatDateForDisplay(date),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+                        }
+                        
+                        // Messages for this date
+                        items(dayMessages) { messageDisplay ->
+                            MessageItem(messageDisplay)
+                        }
+                    }
                 }
             }
             
@@ -503,19 +568,160 @@ fun MessageItem(messageDisplay: MessageDisplay) {
     val message = messageDisplay.message
     val isSent = messageDisplay.isSent
     
-    val textColor = when {
-        message.isEmergency() -> SOSRed
-        isSent -> SendTextBlue
-        else -> ReceiveTextGreen
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.dp),
+        horizontalAlignment = if (isSent) Alignment.End else Alignment.Start
+    ) {
+        // Message bubble with dynamic width based on text length
+        Card(
+            modifier = Modifier
+                .widthIn(
+                    min = 60.dp,
+                    max = when {
+                        message.content.length > 150 -> 350.dp
+                        message.content.length > 100 -> 300.dp
+                        message.content.length > 50 -> 250.dp
+                        message.content.length > 20 -> 180.dp
+                        message.content.length > 10 -> 120.dp
+                        else -> 80.dp
+                    }
+                )
+                .padding(horizontal = 6.dp),
+            shape = RoundedCornerShape(
+                topStart = 12.dp,
+                topEnd = 12.dp,
+                bottomStart = if (isSent) 12.dp else 4.dp,
+                bottomEnd = if (isSent) 4.dp else 12.dp
+            ),
+            colors = CardDefaults.cardColors(
+                containerColor = when {
+                    message.isEmergency() -> Color(0xFFFFEBEE) // Light red for emergency
+                    isSent -> MaterialTheme.colorScheme.primaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceVariant
+                }
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(8.dp)
+            ) {
+                // Message content
+                Text(
+                    text = message.content,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = when {
+                        message.isEmergency() -> Color(0xFFD32F2F) // Dark red for emergency text
+                        isSent -> MaterialTheme.colorScheme.onPrimaryContainer
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                // Location info if available (compact)
+                if (message.hasLocation()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Location",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = message.getLocationString(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            modifier = Modifier.weight(1f),
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+                
+                // Emergency indicator (compact)
+                if (message.isEmergency()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Emergency",
+                            tint = Color(0xFFFF5722),
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = "EMERGENCY",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFFF5722),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+                
+                // Timestamp inside the bubble
+                Spacer(modifier = Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                ) {
+                    Text(
+                        text = getTimeOnly(message.timestamp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when {
+                            message.isEmergency() -> Color(0xFFD32F2F).copy(alpha = 0.9f) // Dark red for emergency
+                            isSent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)
+                        },
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
     }
+}
+
+// Helper function to get time only (HH:mm format)
+private fun getTimeOnly(timestamp: Long): String {
+    val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+    return sdf.format(java.util.Date(timestamp))
+}
+
+// Helper function to get date only (yyyy-MM-dd format)
+private fun getDateOnly(timestamp: Long): String {
+    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+    return sdf.format(java.util.Date(timestamp))
+}
+
+// Helper function to format date for display
+private fun formatDateForDisplay(dateString: String): String {
+    val today = getDateOnly(System.currentTimeMillis())
+    val yesterday = getDateOnly(System.currentTimeMillis() - 24 * 60 * 60 * 1000)
     
-    Text(
-        text = "${if (isSent) "SENT" else "RECEIVED"}: ${message}",
-        color = textColor,
-        fontFamily = FontFamily.Monospace,
-        fontSize = 12.sp,
-        modifier = Modifier.fillMaxWidth()
-    )
+    return when (dateString) {
+        today -> "Today"
+        yesterday -> "Yesterday"
+        else -> {
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
+            val date = sdf.parse(dateString)
+            val displaySdf = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+            displaySdf.format(date!!)
+        }
+    }
 }
 
 data class MessageDisplay(

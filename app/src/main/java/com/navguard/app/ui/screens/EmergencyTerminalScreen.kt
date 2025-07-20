@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material3.*
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.*
@@ -35,14 +36,20 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.tween
@@ -567,6 +574,7 @@ fun EmergencyTerminalScreen(
 fun MessageItem(messageDisplay: MessageDisplay) {
     val message = messageDisplay.message
     val isSent = messageDisplay.isSent
+    val uriHandler = LocalUriHandler.current
     
     Column(
         modifier = Modifier
@@ -629,17 +637,37 @@ fun MessageItem(messageDisplay: MessageDisplay) {
                         Icon(
                             imageVector = Icons.Default.Info,
                             contentDescription = "Location",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                            tint = Color(0xFF2196F3).copy(alpha = 0.8f), // Blue color
                             modifier = Modifier.size(10.dp)
                         )
                         Spacer(modifier = Modifier.width(2.dp))
-                        Text(
-                            text = message.getLocationString(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.weight(1f),
-                            fontSize = 10.sp
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    val url = message.getGoogleMapsUrl()
+                                    if (url.isNotEmpty()) {
+                                        uriHandler.openUri(url)
+                                    }
+                                }
+                        ) {
+                            Text(
+                                text = message.getLocationDisplayText(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF2196F3).copy(alpha = 0.9f), // Blue hyperlink color
+                                fontSize = 10.sp,
+                                textDecoration = TextDecoration.Underline,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Icon(
+                                imageVector = Icons.Default.OpenInNew,
+                                contentDescription = "Open in Maps",
+                                tint = Color(0xFF2196F3).copy(alpha = 0.7f), // Blue color
+                                modifier = Modifier.size(8.dp)
+                            )
+                        }
                     }
                 }
                 

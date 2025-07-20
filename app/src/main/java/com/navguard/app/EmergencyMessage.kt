@@ -37,6 +37,22 @@ data class EmergencyMessage(
         }
     }
     
+    fun getGoogleMapsUrl(): String {
+        return if (hasLocation()) {
+            "https://www.google.com/maps?q=$latitude,$longitude"
+        } else {
+            ""
+        }
+    }
+    
+    fun getLocationDisplayText(): String {
+        return if (hasLocation()) {
+            "📍 Location"
+        } else {
+            "📍 No location"
+        }
+    }
+    
     fun incrementHopCount() {
         hopCount++
     }

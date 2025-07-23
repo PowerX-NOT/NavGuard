@@ -66,6 +66,9 @@ class SerialService : Service(), SerialListener {
             }
         }
 
+    val isConnected: Boolean
+        get() = connected
+
     /**
      * Lifecycle
      */
@@ -221,6 +224,9 @@ class SerialService : Service(), SerialListener {
                 }
             }
         }
+        // Always clear socket and connected state on error
+        socket = null
+        connected = false
     }
 
     override fun onSerialRead(datas: ArrayDeque<ByteArray>) {
@@ -280,5 +286,8 @@ class SerialService : Service(), SerialListener {
                 }
             }
         }
+        // Always clear socket and connected state on error
+        socket = null
+        connected = false
     }
 }

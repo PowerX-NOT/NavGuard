@@ -219,7 +219,7 @@ fun EmergencyTerminalScreen(
             // Wait for service to be bound
             delay(500)
             service?.let { svc ->
-                if (svc.connectedDeviceAddress == deviceAddress) {
+                if (svc.connectedDeviceAddress == deviceAddress && svc.isConnected) {
                     // Already connected to the correct device, just attach listener
                     svc.attach(serialListener)
                     connectionStatus = "Connected to device"

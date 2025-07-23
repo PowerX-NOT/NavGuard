@@ -37,6 +37,7 @@ import android.widget.Toast
 import android.bluetooth.BluetoothProfile
 import android.app.AlertDialog
 import android.content.DialogInterface
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -283,34 +284,34 @@ fun DevicesScreen(
                 )
             }
             
-            // Header Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        Icons.Default.Bluetooth,
-                        contentDescription = null,
-                        modifier = Modifier.size(24.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = connectionStatus,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-            }
+            // Header Card (REMOVE this block)
+            // Card(
+            //     modifier = Modifier
+            //         .fillMaxWidth()
+            //         .padding(bottom = 16.dp),
+            //     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            // ) {
+            //     Row(
+            //         modifier = Modifier
+            //             .fillMaxWidth()
+            //             .padding(16.dp),
+            //         verticalAlignment = Alignment.CenterVertically,
+            //         horizontalArrangement = Arrangement.Center
+            //     ) {
+            //         Icon(
+            //             Icons.Default.Bluetooth,
+            //             contentDescription = null,
+            //             modifier = Modifier.size(24.dp),
+            //             tint = MaterialTheme.colorScheme.primary
+            //         )
+            //         Spacer(modifier = Modifier.width(8.dp))
+            //         Text(
+            //             text = connectionStatus,
+            //             style = MaterialTheme.typography.titleMedium,
+            //             fontWeight = FontWeight.Bold
+            //         )
+            //     }
+            // }
             
             // Device Lists
             if (pairedDevices.isEmpty() && availableDevices.isEmpty()) {
@@ -345,9 +346,11 @@ fun DevicesScreen(
                             )
                         }
                         items(pairedDevices) { device ->
+                            val isConnectedDevice = device.address == connectedDevice?.address
                             DeviceItem(
                                 device = device,
                                 isPaired = true,
+                                isConnected = isConnectedDevice,
                                 onClick = {
                                     onDeviceSelected(device.address)
                                 }
@@ -445,15 +448,16 @@ fun DevicesScreen(
 fun DeviceItem(
     device: BluetoothDevice,
     isPaired: Boolean,
+    isConnected: Boolean = false,
     onClick: () -> Unit
 ) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = if (isPaired) 
-            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer) 
-        else 
+        colors = if (isPaired)
+            CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+        else
             CardDefaults.cardColors()
     ) {
         Column(
@@ -471,31 +475,27 @@ fun DeviceItem(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )
-                
                 if (isPaired) {
                     Badge(
-                        containerColor = MaterialTheme.colorScheme.primary
+                        containerColor = if (isConnected) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary
                     ) {
                         Text(
-                            text = "Paired",
+                            text = if (isConnected) "Connected" else "Paired",
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onPrimary
+                            color = if (isConnected) Color.White else MaterialTheme.colorScheme.onPrimary
                         )
                     }
                 }
             }
-            
             Spacer(modifier = Modifier.height(4.dp))
-            
             Text(
                 text = device.address,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (isPaired) 
+                color = if (isPaired)
                     MaterialTheme.colorScheme.onPrimaryContainer
-                else 
+                else
                     MaterialTheme.colorScheme.onSurfaceVariant
             )
-            
             if (!isPaired) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(

@@ -74,6 +74,9 @@ import java.io.IOException
 import android.widget.Toast
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
+import androidx.compose.material.icons.filled.Bluetooth
+import android.bluetooth.BluetoothProfile
+import android.os.Build
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,6 +94,7 @@ fun EmergencyTerminalScreen(
     var showDeviceStatus by remember { mutableStateOf(false) }
     var showEmergencyContacts by remember { mutableStateOf(false) }
     var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
+    var isDisconnecting by remember { mutableStateOf(false) }
     
     // Bluetooth connection state
     var service: SerialService? by remember { mutableStateOf(null) }
@@ -183,45 +187,69 @@ fun EmergencyTerminalScreen(
         }
     }
     
+    // Add disconnect logic
+    fun disconnectFromDevice() {
+        isDisconnecting = true
+        service?.disconnect()
+        socket = null
+        isConnected = false
+        connectionStatus = "No device connected"
+        Toast.makeText(context, "Disconnected", Toast.LENGTH_SHORT).show()
+        context.stopService(Intent(context, SerialService::class.java))
+    }
+    
     // Connect to Bluetooth device on screen load
-    LaunchedEffect(deviceAddress) {
+    LaunchedEffect(deviceAddress, service) {
         // Check storage permission
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) 
             != PackageManager.PERMISSION_GRANTED) {
             storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         }
-        
         // Load existing messages
         messages = chatManager.loadMessages(deviceAddress)
-        
         try {
-            // Bind to service
+            // Start service in foreground mode before binding
             val intent = Intent(context, SerialService::class.java)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
             context.bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
-            
-            // Get Bluetooth device and create socket
-            val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
-            if (bluetoothAdapter != null && bluetoothAdapter.isEnabled) {
-                val device = bluetoothAdapter.getRemoteDevice(deviceAddress)
-                socket = SerialSocket(context.applicationContext, device)
-                
-                // Wait for service to be connected before attempting connection
-                delay(1000)
-                
-                service?.let { svc ->
-                    socket?.let { sock ->
+            // Wait for service to be bound
+            delay(500)
+            service?.let { svc ->
+                if (svc.connectedDeviceAddress == deviceAddress) {
+                    // Already connected to the correct device, just attach listener
+                    svc.attach(serialListener)
+                    connectionStatus = "Connected to device"
+                    isConnected = true // Ensure UI icon is green
+                } else {
+                    // If connected to a different device, disconnect first
+                    if (svc.connectedDeviceAddress != null) {
+                        svc.disconnect()
+                        delay(300) // Give time for disconnect
+                    }
+                    // Get Bluetooth device and create socket
+                    val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+                    if (bluetoothAdapter != null && bluetoothAdapter.isEnabled) {
+                        val device = bluetoothAdapter.getRemoteDevice(deviceAddress)
+                        socket = SerialSocket(context.applicationContext, device)
+                        // Optimistically update UI
+                        connectionStatus = "Connecting to ${device.name ?: deviceAddress}..."
+                        // Wait for service to be ready
+                        delay(500)
                         try {
-                            svc.connect(sock)
+                            svc.connect(socket!!)
                         } catch (e: Exception) {
                             connectionStatus = "Connection failed: ${e.message}"
                         }
-                        connectionStatus = "Connecting to ${device.name ?: deviceAddress}..."
+                    } else {
+                        connectionStatus = "Bluetooth not available"
                     }
-                } ?: run {
-                    connectionStatus = "Service not ready"
                 }
-            } else {
-                connectionStatus = "Bluetooth not available"
+            } ?: run {
+                connectionStatus = "Service not ready"
             }
         } catch (e: Exception) {
             connectionStatus = "Connection error: ${e.message}"
@@ -231,7 +259,7 @@ fun EmergencyTerminalScreen(
     // Cleanup on dispose
     DisposableEffect(Unit) {
         onDispose {
-            service?.disconnect()
+            // Only detach listener and unbind service, do NOT disconnect
             service?.detach()
             try {
                 context.unbindService(serviceConnection)
@@ -259,7 +287,14 @@ fun EmergencyTerminalScreen(
                     BluetoothDevice.ACTION_ACL_CONNECTED -> {
                         val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
                         connectedDevice = device
-                        connectionStatus = device?.let { "Connected to ${it.name ?: it.address}" } ?: "Connected"
+                        connectionStatus = device?.let { "Connected to ${it.name ?: it.address}" } ?: run {
+                            // Fallback: check system state
+                            val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+                            val classicConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED
+                            val a2dpConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.A2DP) == BluetoothProfile.STATE_CONNECTED
+                            val gattConnected = bluetoothAdapter?.getProfileConnectionState(7) == BluetoothProfile.STATE_CONNECTED
+                            if (classicConnected || a2dpConnected || gattConnected) "Connected to system Bluetooth device" else "Connected"
+                        }
                         Toast.makeText(context, connectionStatus, Toast.LENGTH_SHORT).show()
                     }
                     BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
@@ -267,7 +302,16 @@ fun EmergencyTerminalScreen(
                         if (connectedDevice?.address == device?.address) {
                             connectedDevice = null
                         }
-                        connectionStatus = "No device connected"
+                        // Fallback: check system state
+                        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+                        val classicConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED
+                        val a2dpConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.A2DP) == BluetoothProfile.STATE_CONNECTED
+                        val gattConnected = bluetoothAdapter?.getProfileConnectionState(7) == BluetoothProfile.STATE_CONNECTED
+                        connectionStatus = if (classicConnected || a2dpConnected || gattConnected) {
+                            "Connected to system Bluetooth device"
+                        } else {
+                            "No device connected"
+                        }
                         Toast.makeText(context, "Device disconnected", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -287,9 +331,12 @@ fun EmergencyTerminalScreen(
             } catch (e: Exception) {}
         }
     }
-    // On launch, check for already connected device
+    // On launch, check for already connected device (classic and BLE)
     LaunchedEffect(Unit) {
         val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        val classicConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED
+        val a2dpConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.A2DP) == BluetoothProfile.STATE_CONNECTED
+        val gattConnected = bluetoothAdapter?.getProfileConnectionState(7) == BluetoothProfile.STATE_CONNECTED // 7 = GATT
         val connected = bluetoothAdapter?.bondedDevices?.firstOrNull { device ->
             try {
                 val method = device.javaClass.getMethod("isConnected")
@@ -299,7 +346,11 @@ fun EmergencyTerminalScreen(
             }
         }
         connectedDevice = connected
-        connectionStatus = connected?.let { "Connected to ${it.name ?: it.address}" } ?: "No device connected"
+        connectionStatus = when {
+            connected != null -> "Connected to ${connected.name ?: connected.address}"
+            classicConnected || a2dpConnected || gattConnected -> "Connected to system Bluetooth device"
+            else -> "No device connected"
+        }
     }
     
     Scaffold(
@@ -317,6 +368,11 @@ fun EmergencyTerminalScreen(
                     }
                     IconButton(onClick = { showDeviceStatus = true }) {
                         Icon(Icons.Default.Info, contentDescription = "Device Status")
+                    }
+                    if (isConnected && !isDisconnecting) {
+                        IconButton(onClick = { disconnectFromDevice() }) {
+                            Icon(Icons.Default.Bluetooth, contentDescription = "Disconnect")
+                        }
                     }
                 }
             )

@@ -34,6 +34,9 @@ import com.navguard.app.BluetoothUtil
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import android.widget.Toast
+import android.bluetooth.BluetoothProfile
+import android.app.AlertDialog
+import android.content.DialogInterface
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +52,8 @@ fun DevicesScreen(
     var isScanning by remember { mutableStateOf(false) }
     var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
     var connectionStatus by remember { mutableStateOf("No device connected") }
+    var deviceToPair by remember { mutableStateOf<BluetoothDevice?>(null) }
+    var showPairDialog by remember { mutableStateOf(false) }
     
     val bluetoothAdapter = remember { BluetoothAdapter.getDefaultAdapter() }
 
@@ -110,7 +115,13 @@ fun DevicesScreen(
                     BluetoothDevice.ACTION_ACL_CONNECTED -> {
                         val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
                         connectedDevice = device
-                        connectionStatus = device?.let { "Connected to ${it.name ?: it.address}" } ?: "Connected"
+                        connectionStatus = device?.let { "Connected to ${it.name ?: it.address}" } ?: run {
+                            // Fallback: check system state
+                            val classicConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED
+                            val a2dpConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.A2DP) == BluetoothProfile.STATE_CONNECTED
+                            val gattConnected = bluetoothAdapter?.getProfileConnectionState(7) == BluetoothProfile.STATE_CONNECTED
+                            if (classicConnected || a2dpConnected || gattConnected) "Connected to system Bluetooth device" else "Connected"
+                        }
                         Toast.makeText(context, connectionStatus, Toast.LENGTH_SHORT).show()
                     }
                     BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
@@ -118,7 +129,15 @@ fun DevicesScreen(
                         if (connectedDevice?.address == device?.address) {
                             connectedDevice = null
                         }
-                        connectionStatus = "No device connected"
+                        // Fallback: check system state
+                        val classicConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED
+                        val a2dpConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.A2DP) == BluetoothProfile.STATE_CONNECTED
+                        val gattConnected = bluetoothAdapter?.getProfileConnectionState(7) == BluetoothProfile.STATE_CONNECTED
+                        connectionStatus = if (classicConnected || a2dpConnected || gattConnected) {
+                            "Connected to system Bluetooth device"
+                        } else {
+                            "No device connected"
+                        }
                         Toast.makeText(context, "Device disconnected", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -160,10 +179,12 @@ fun DevicesScreen(
         }
     }
 
-    // On launch, check for already connected device
+    // On launch, check for already connected device (classic and BLE)
     LaunchedEffect(Unit) {
+        val classicConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED
+        val a2dpConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.A2DP) == BluetoothProfile.STATE_CONNECTED
+        val gattConnected = bluetoothAdapter?.getProfileConnectionState(7) == BluetoothProfile.STATE_CONNECTED // 7 = GATT
         val connected = bluetoothAdapter?.bondedDevices?.firstOrNull { device ->
-            // Check if device is connected (classic profile)
             try {
                 val method = device.javaClass.getMethod("isConnected")
                 method.invoke(device) as? Boolean ?: false
@@ -172,7 +193,11 @@ fun DevicesScreen(
             }
         }
         connectedDevice = connected
-        connectionStatus = connected?.let { "Connected to ${it.name ?: it.address}" } ?: "No device connected"
+        connectionStatus = when {
+            connected != null -> "Connected to ${connected.name ?: connected.address}"
+            classicConnected || a2dpConnected || gattConnected -> "Connected to system Bluetooth device"
+            else -> "No device connected"
+        }
     }
     
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -319,12 +344,13 @@ fun DevicesScreen(
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                         }
-                        
                         items(pairedDevices) { device ->
                             DeviceItem(
                                 device = device,
                                 isPaired = true,
-                                onClick = { onDeviceSelected(device.address) }
+                                onClick = {
+                                    onDeviceSelected(device.address)
+                                }
                             )
                         }
                     }
@@ -346,7 +372,10 @@ fun DevicesScreen(
                             DeviceItem(
                                 device = device,
                                 isPaired = false,
-                                onClick = { onDeviceSelected(device.address) }
+                                onClick = {
+                                    deviceToPair = device
+                                    showPairDialog = true
+                                }
                             )
                         }
                     }
@@ -375,6 +404,34 @@ fun DevicesScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showPermissionDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Compose AlertDialog for pairing
+    if (showPairDialog && deviceToPair != null) {
+        AlertDialog(
+            onDismissRequest = { showPairDialog = false },
+            title = { Text("Pair Device") },
+            text = { Text("This device is not paired. Would you like to pair it now?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    try {
+                        val method = deviceToPair!!.javaClass.getMethod("createBond")
+                        method.invoke(deviceToPair)
+                        Toast.makeText(context, "Pairing started", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "Pairing failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                    showPairDialog = false
+                }) {
+                    Text("Pair")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPairDialog = false }) {
                     Text("Cancel")
                 }
             }

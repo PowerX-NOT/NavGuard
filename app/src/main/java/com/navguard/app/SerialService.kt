@@ -53,6 +53,19 @@ class SerialService : Service(), SerialListener {
     private var listener: SerialListener? = null
     private var connected = false
 
+    // Expose the currently connected device address (or null)
+    val connectedDeviceAddress: String?
+        get() = socket?.let {
+            try {
+                val field = it.javaClass.getDeclaredField("device")
+                field.isAccessible = true
+                val device = field.get(it) as? android.bluetooth.BluetoothDevice
+                device?.address
+            } catch (e: Exception) {
+                null
+            }
+        }
+
     /**
      * Lifecycle
      */

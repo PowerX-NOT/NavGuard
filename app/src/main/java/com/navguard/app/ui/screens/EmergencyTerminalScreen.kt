@@ -369,11 +369,6 @@ fun EmergencyTerminalScreen(
                     IconButton(onClick = { showDeviceStatus = true }) {
                         Icon(Icons.Default.Info, contentDescription = "Device Status")
                     }
-                    if (isConnected && !isDisconnecting) {
-                        IconButton(onClick = { disconnectFromDevice() }) {
-                            Icon(Icons.Default.Bluetooth, contentDescription = "Disconnect")
-                        }
-                    }
                 }
             )
         }

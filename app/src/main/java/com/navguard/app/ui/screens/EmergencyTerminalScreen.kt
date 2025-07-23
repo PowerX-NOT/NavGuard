@@ -71,6 +71,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import java.util.*
 import java.io.IOException
+import android.widget.Toast
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,11 +85,12 @@ fun EmergencyTerminalScreen(
     var messages by remember { mutableStateOf<List<MessageDisplay>>(emptyList()) }
     var messageText by remember { mutableStateOf("") }
     var showClearDialog by remember { mutableStateOf(false) }
-    var connectionStatus by remember { mutableStateOf("Initializing...") }
+    var connectionStatus by remember { mutableStateOf("No device connected") }
     var locationText by remember { mutableStateOf("GPS: Not available") }
     var isConnected by remember { mutableStateOf(false) }
     var showDeviceStatus by remember { mutableStateOf(false) }
     var showEmergencyContacts by remember { mutableStateOf(false) }
+    var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
     
     // Bluetooth connection state
     var service: SerialService? by remember { mutableStateOf(null) }
@@ -245,6 +249,57 @@ fun EmergencyTerminalScreen(
             delay(50) // Small delay for smoother animation
             listState.animateScrollToItem(messages.size - 1)
         }
+    }
+    
+    // --- Bluetooth connection state receiver ---
+    val connectionReceiver = remember {
+        object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                when (intent.action) {
+                    BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                        val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                        connectedDevice = device
+                        connectionStatus = device?.let { "Connected to ${it.name ?: it.address}" } ?: "Connected"
+                        Toast.makeText(context, connectionStatus, Toast.LENGTH_SHORT).show()
+                    }
+                    BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                        val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                        if (connectedDevice?.address == device?.address) {
+                            connectedDevice = null
+                        }
+                        connectionStatus = "No device connected"
+                        Toast.makeText(context, "Device disconnected", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
+    // Register/Unregister BroadcastReceiver for connection state
+    DisposableEffect(Unit) {
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+        }
+        context.registerReceiver(connectionReceiver, filter)
+        onDispose {
+            try {
+                context.unregisterReceiver(connectionReceiver)
+            } catch (e: Exception) {}
+        }
+    }
+    // On launch, check for already connected device
+    LaunchedEffect(Unit) {
+        val bluetoothAdapter = BluetoothAdapter.getDefaultAdapter()
+        val connected = bluetoothAdapter?.bondedDevices?.firstOrNull { device ->
+            try {
+                val method = device.javaClass.getMethod("isConnected")
+                method.invoke(device) as? Boolean ?: false
+            } catch (e: Exception) {
+                false
+            }
+        }
+        connectedDevice = connected
+        connectionStatus = connected?.let { "Connected to ${it.name ?: it.address}" } ?: "No device connected"
     }
     
     Scaffold(

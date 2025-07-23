@@ -33,6 +33,7 @@ import androidx.core.content.ContextCompat
 import com.navguard.app.BluetoothUtil
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import android.widget.Toast
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,6 +47,8 @@ fun DevicesScreen(
     var permissionMissing by remember { mutableStateOf(false) }
     var showPermissionDialog by remember { mutableStateOf(false) }
     var isScanning by remember { mutableStateOf(false) }
+    var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
+    var connectionStatus by remember { mutableStateOf("No device connected") }
     
     val bluetoothAdapter = remember { BluetoothAdapter.getDefaultAdapter() }
 
@@ -99,6 +102,30 @@ fun DevicesScreen(
         }
     }
     
+    // --- Bluetooth connection state receiver ---
+    val connectionReceiver = remember {
+        object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                when (intent.action) {
+                    BluetoothDevice.ACTION_ACL_CONNECTED -> {
+                        val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                        connectedDevice = device
+                        connectionStatus = device?.let { "Connected to ${it.name ?: it.address}" } ?: "Connected"
+                        Toast.makeText(context, connectionStatus, Toast.LENGTH_SHORT).show()
+                    }
+                    BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
+                        val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                        if (connectedDevice?.address == device?.address) {
+                            connectedDevice = null
+                        }
+                        connectionStatus = "No device connected"
+                        Toast.makeText(context, "Device disconnected", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+    }
+
     // Register/Unregister BroadcastReceiver
     DisposableEffect(Unit) {
         val filter = IntentFilter().apply {
@@ -117,6 +144,35 @@ fun DevicesScreen(
                 // Receiver might not be registered
             }
         }
+    }
+
+    // Register/Unregister BroadcastReceiver for connection state
+    DisposableEffect(Unit) {
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+        }
+        context.registerReceiver(connectionReceiver, filter)
+        onDispose {
+            try {
+                context.unregisterReceiver(connectionReceiver)
+            } catch (e: Exception) {}
+        }
+    }
+
+    // On launch, check for already connected device
+    LaunchedEffect(Unit) {
+        val connected = bluetoothAdapter?.bondedDevices?.firstOrNull { device ->
+            // Check if device is connected (classic profile)
+            try {
+                val method = device.javaClass.getMethod("isConnected")
+                method.invoke(device) as? Boolean ?: false
+            } catch (e: Exception) {
+                false
+            }
+        }
+        connectedDevice = connected
+        connectionStatus = connected?.let { "Connected to ${it.name ?: it.address}" } ?: "No device connected"
     }
     
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -224,7 +280,7 @@ fun DevicesScreen(
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Emergency Devices",
+                        text = connectionStatus,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )

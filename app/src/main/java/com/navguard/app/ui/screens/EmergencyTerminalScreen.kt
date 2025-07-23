@@ -7,8 +7,10 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.content.pm.PackageManager
 import android.os.IBinder
 import android.os.Vibrator
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -19,7 +21,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Send
@@ -57,6 +59,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.FocusInteraction
 import androidx.core.content.ContextCompat
 import com.navguard.app.EmergencyMessage
+import com.navguard.app.ChatPersistenceManager
+import com.navguard.app.MessageDisplay
 import com.navguard.app.LocationManager
 import com.navguard.app.SerialSocket
 import com.navguard.app.SerialListener
@@ -77,6 +81,7 @@ fun EmergencyTerminalScreen(
     val context = LocalContext.current
     var messages by remember { mutableStateOf<List<MessageDisplay>>(emptyList()) }
     var messageText by remember { mutableStateOf("") }
+    var showClearDialog by remember { mutableStateOf(false) }
     var connectionStatus by remember { mutableStateOf("Initializing...") }
     var locationText by remember { mutableStateOf("GPS: Not available") }
     var isConnected by remember { mutableStateOf(false) }
@@ -93,6 +98,18 @@ fun EmergencyTerminalScreen(
     val focusManager = LocalFocusManager.current
     val coroutineScope = rememberCoroutineScope()
     var isInputFocused by remember { mutableStateOf(false) }
+    
+    // Chat persistence manager
+    val chatManager = remember { ChatPersistenceManager(context) }
+    
+    // Storage permission launcher
+    val storagePermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            connectionStatus = "Storage permission needed for chat history"
+        }
+    }
     
     val locationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -119,7 +136,10 @@ fun EmergencyTerminalScreen(
                 val receivedText = String(data)
                 // Parse received emergency message
                 parseReceivedMessage(receivedText)?.let { msg ->
-                    messages = messages + MessageDisplay(msg, false)
+                    val newMessages = messages + MessageDisplay(msg, false)
+                    messages = newMessages
+                    // Save messages immediately
+                    chatManager.saveMessages(deviceAddress, newMessages)
                 }
             }
             
@@ -129,7 +149,10 @@ fun EmergencyTerminalScreen(
                     sb.append(String(data))
                 }
                 parseReceivedMessage(sb.toString())?.let { msg ->
-                    messages = messages + MessageDisplay(msg, false)
+                    val newMessages = messages + MessageDisplay(msg, false)
+                    messages = newMessages
+                    // Save messages immediately
+                    chatManager.saveMessages(deviceAddress, newMessages)
                 }
             }
             
@@ -158,6 +181,15 @@ fun EmergencyTerminalScreen(
     
     // Connect to Bluetooth device on screen load
     LaunchedEffect(deviceAddress) {
+        // Check storage permission
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) 
+            != PackageManager.PERMISSION_GRANTED) {
+            storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+        
+        // Load existing messages
+        messages = chatManager.loadMessages(deviceAddress)
+        
         try {
             // Bind to service
             val intent = Intent(context, SerialService::class.java)
@@ -225,8 +257,8 @@ fun EmergencyTerminalScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { messages = emptyList() }) {
-                        Icon(Icons.Default.Clear, contentDescription = "Clear")
+                    IconButton(onClick = { showClearDialog = true }) {
+                        Icon(Icons.Default.Delete, contentDescription = "Clear Chat History")
                     }
                     IconButton(onClick = { showDeviceStatus = true }) {
                         Icon(Icons.Default.Info, contentDescription = "Device Status")
@@ -259,7 +291,7 @@ fun EmergencyTerminalScreen(
                 val statusColor = if (isConnectedState) Color(0xFF4CAF50) else Color(0xFFFF5722)
                 
                 Icon(
-                    imageVector = if (isConnectedState) Icons.Default.Send else Icons.Default.Clear,
+                    imageVector = if (isConnectedState) Icons.Default.Send else Icons.Default.Delete,
                     contentDescription = null,
                     tint = statusColor,
                     modifier = Modifier.size(14.dp)
@@ -474,8 +506,12 @@ fun EmergencyTerminalScreen(
                                                 sendRegularMessage(
                                                     message = messageText,
                                                     service = service,
+                                                    chatManager = chatManager,
+                                                    deviceAddress = deviceAddress,
                                                     onMessageSent = { msg ->
-                                                        messages = messages + MessageDisplay(msg, true)
+                                                        val newMessages = messages + MessageDisplay(msg, true)
+                                                        messages = newMessages
+                                                        chatManager.saveMessages(deviceAddress, newMessages)
                                                         messageText = ""
                                                     }
                                                 )
@@ -500,7 +536,11 @@ fun EmergencyTerminalScreen(
                                                     locationText = "GPS: ${String.format("%.6f°N", lat)}, ${String.format("%.6f°E", lon)}"
                                                 },
                                                 onMessageSent = { msg ->
-                                                    messages = messages + MessageDisplay(msg, true)
+                                                    val newMessages = messages + MessageDisplay(msg, true)
+                                                    messages = newMessages
+                                                    chatManager.saveMessages(deviceAddress, newMessages)
+                                                    messages = newMessages
+                                                    chatManager.saveMessages(deviceAddress, newMessages)
                                                     messageText = ""
                                                 },
                                                 onStatusUpdate = { status ->
@@ -533,6 +573,33 @@ fun EmergencyTerminalScreen(
                 }
             }
         }
+    }
+    
+    // Clear Chat Confirmation Dialog
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            title = { Text("Clear Chat History") },
+            text = { 
+                Text("Are you sure you want to delete the chat history? This action cannot be undone.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        messages = emptyList()
+                        chatManager.clearMessages(deviceAddress)
+                        showClearDialog = false
+                    }
+                ) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
     
     // Device Status Dialog
@@ -752,14 +819,12 @@ private fun formatDateForDisplay(dateString: String): String {
     }
 }
 
-data class MessageDisplay(
-    val message: EmergencyMessage,
-    val isSent: Boolean
-)
 
 private fun sendRegularMessage(
     message: String,
     service: SerialService?,
+    chatManager: ChatPersistenceManager,
+    deviceAddress: String,
     onMessageSent: (EmergencyMessage) -> Unit
 ) {
     val emergencyMessage = EmergencyMessage(

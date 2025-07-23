@@ -19,6 +19,10 @@
     
     <!-- Vibration for emergency alerts -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    
+    <!-- Storage permissions for chat persistence -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
 
     <!-- mipmap/ic_launcher created with Android Studio -> New -> Image Asset using @color/colorPrimaryDark as background color -->
     <application

@@ -81,6 +81,16 @@ class SerialService : Service(), SerialListener {
     override fun onBind(intent: Intent): IBinder = binder
 
     /**
+     * Ensure foreground service compliance
+     */
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Always create notification and start foreground as soon as service starts
+        createNotification()
+        // If you want the service to be restarted if killed, return START_STICKY
+        return START_STICKY
+    }
+
+    /**
      * Api
      */
     @Throws(IOException::class)

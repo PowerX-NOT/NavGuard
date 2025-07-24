@@ -42,6 +42,7 @@ import androidx.compose.ui.graphics.Color
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DevicesScreen(
+    scanKey: Int = 0,
     onDeviceSelected: (String) -> Unit
 ) {
     val context = LocalContext.current
@@ -230,6 +231,25 @@ fun DevicesScreen(
             permissionMissing = missing
         }
     }
+
+    fun triggerScan() {
+        val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(
+                Manifest.permission.BLUETOOTH_CONNECT,
+                Manifest.permission.BLUETOOTH_SCAN,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        } else {
+            arrayOf(
+                Manifest.permission.ACCESS_FINE_LOCATION
+            )
+        }
+        permissionLauncher.launch(requiredPermissions)
+    }
+    
+    LaunchedEffect(scanKey) {
+        triggerScan()
+    }
     
     Scaffold(
         topBar = {
@@ -237,20 +257,7 @@ fun DevicesScreen(
                 title = { Text("Emergency Devices") },
                 actions = {
                     IconButton(
-                        onClick = {
-                            val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                arrayOf(
-                                    Manifest.permission.BLUETOOTH_CONNECT,
-                                    Manifest.permission.BLUETOOTH_SCAN,
-                                    Manifest.permission.ACCESS_FINE_LOCATION
-                                )
-                            } else {
-                                arrayOf(
-                                    Manifest.permission.ACCESS_FINE_LOCATION
-                                )
-                            }
-                            permissionLauncher.launch(requiredPermissions)
-                        },
+                        onClick = { triggerScan() },
                         enabled = !isScanning
                     ) {
                         Icon(

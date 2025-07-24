@@ -20,6 +20,9 @@ import com.navguard.app.ui.screens.EmergencyTerminalScreen
 import com.navguard.app.ui.theme.NavGuardTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalContext
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
@@ -52,6 +55,7 @@ fun NavGuardApp() {
     var initialRoute = remember { "devices" }
     var connectedDeviceAddress: String? = null
     var autoOpened = remember { false }
+    var scanKey by remember { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
         val classicConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED
@@ -80,6 +84,7 @@ fun NavGuardApp() {
     ) {
         composable("devices") {
             DevicesScreen(
+                scanKey = scanKey,
                 onDeviceSelected = { deviceAddress ->
                     autoOpened = false
                     navController.navigate("emergency_terminal/$deviceAddress")
@@ -91,6 +96,7 @@ fun NavGuardApp() {
             EmergencyTerminalScreen(
                 deviceAddress = deviceAddress,
                 onNavigateBack = {
+                    scanKey++
                     if (autoOpened) {
                         autoOpened = false
                         navController.navigate("devices") {

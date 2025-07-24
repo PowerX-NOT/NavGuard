@@ -18,6 +18,12 @@ import androidx.navigation.compose.rememberNavController
 import com.navguard.app.ui.screens.DevicesScreen
 import com.navguard.app.ui.screens.EmergencyTerminalScreen
 import com.navguard.app.ui.theme.NavGuardTheme
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothProfile
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,10 +47,34 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun NavGuardApp() {
     val navController = rememberNavController()
-    
+    val context = LocalContext.current
+    val bluetoothAdapter = remember { BluetoothAdapter.getDefaultAdapter() }
+    var initialRoute = remember { "devices" }
+    var connectedDeviceAddress: String? = null
+
+    LaunchedEffect(Unit) {
+        val classicConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED
+        val a2dpConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.A2DP) == BluetoothProfile.STATE_CONNECTED
+        val gattConnected = bluetoothAdapter?.getProfileConnectionState(7) == BluetoothProfile.STATE_CONNECTED // 7 = GATT
+        val connected = bluetoothAdapter?.bondedDevices?.firstOrNull { device ->
+            try {
+                val method = device.javaClass.getMethod("isConnected")
+                method.invoke(device) as? Boolean ?: false
+            } catch (e: Exception) {
+                false
+            }
+        }
+        if (connected != null) {
+            connectedDeviceAddress = connected.address
+            navController.navigate("emergency_terminal/${connected.address}") {
+                popUpTo(0) { inclusive = true }
+            }
+        }
+    }
+
     NavHost(
         navController = navController,
-        startDestination = "devices"
+        startDestination = initialRoute
     ) {
         composable("devices") {
             DevicesScreen(

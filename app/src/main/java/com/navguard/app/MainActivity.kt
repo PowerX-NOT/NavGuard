@@ -51,6 +51,7 @@ fun NavGuardApp() {
     val bluetoothAdapter = remember { BluetoothAdapter.getDefaultAdapter() }
     var initialRoute = remember { "devices" }
     var connectedDeviceAddress: String? = null
+    var autoOpened = remember { false }
 
     LaunchedEffect(Unit) {
         val classicConnected = bluetoothAdapter?.getProfileConnectionState(BluetoothProfile.HEADSET) == BluetoothProfile.STATE_CONNECTED
@@ -66,6 +67,7 @@ fun NavGuardApp() {
         }
         if (connected != null) {
             connectedDeviceAddress = connected.address
+            autoOpened = true
             navController.navigate("emergency_terminal/${connected.address}") {
                 popUpTo(0) { inclusive = true }
             }
@@ -79,6 +81,7 @@ fun NavGuardApp() {
         composable("devices") {
             DevicesScreen(
                 onDeviceSelected = { deviceAddress ->
+                    autoOpened = false
                     navController.navigate("emergency_terminal/$deviceAddress")
                 }
             )
@@ -88,7 +91,14 @@ fun NavGuardApp() {
             EmergencyTerminalScreen(
                 deviceAddress = deviceAddress,
                 onNavigateBack = {
-                    navController.popBackStack()
+                    if (autoOpened) {
+                        autoOpened = false
+                        navController.navigate("devices") {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    } else {
+                        navController.popBackStack()
+                    }
                 }
             )
         }

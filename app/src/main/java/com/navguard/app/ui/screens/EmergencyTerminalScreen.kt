@@ -138,6 +138,7 @@ fun EmergencyTerminalScreen(
             override fun onSerialConnectError(e: Exception) {
                 isConnected = false
                 connectionStatus = "Connection failed: ${e.message}"
+                Toast.makeText(context, "Failed to connect: ${e.message}", Toast.LENGTH_LONG).show()
             }
             
             override fun onSerialRead(data: ByteArray) {

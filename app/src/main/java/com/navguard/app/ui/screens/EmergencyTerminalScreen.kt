@@ -869,8 +869,13 @@ private fun parseReceivedMessage(data: String): EmergencyMessage? {
     return try {
         val parts = data.trim().split("|")
         if (parts.size >= 5) {
+            val content = parts[1]
+            // Don't create message if content is empty
+            if (content.isBlank()) {
+                return null
+            }
             EmergencyMessage(
-                content = parts[1],
+                content = content,
                 type = EmergencyMessage.MessageType.valueOf(parts[0]),
                 latitude = parts[2].toDoubleOrNull() ?: 0.0,
                 longitude = parts[3].toDoubleOrNull() ?: 0.0,
@@ -878,8 +883,13 @@ private fun parseReceivedMessage(data: String): EmergencyMessage? {
             )
         } else {
             // Fallback for simple text messages
+            val trimmedData = data.trim()
+            // Don't create message if data is empty
+            if (trimmedData.isBlank()) {
+                return null
+            }
             EmergencyMessage(
-                content = data,
+                content = trimmedData,
                 type = EmergencyMessage.MessageType.REGULAR
             )
         }
@@ -960,6 +970,11 @@ fun MessageItem(messageDisplay: MessageDisplay) {
     val message = messageDisplay.message
     val isSent = messageDisplay.isSent
     val uriHandler = LocalUriHandler.current
+    
+    // Don't display message if content is empty
+    if (message.content.isBlank()) {
+        return
+    }
     
     Column(
         modifier = Modifier

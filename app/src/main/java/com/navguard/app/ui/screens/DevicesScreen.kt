@@ -231,20 +231,20 @@ fun DevicesScreen(
             permissionMissing = missing
         }
     }
-
+    
     fun triggerScan() {
-        val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            arrayOf(
-                Manifest.permission.BLUETOOTH_CONNECT,
-                Manifest.permission.BLUETOOTH_SCAN,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-        } else {
-            arrayOf(
-                Manifest.permission.ACCESS_FINE_LOCATION
-            )
-        }
-        permissionLauncher.launch(requiredPermissions)
+                            val requiredPermissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                arrayOf(
+                                    Manifest.permission.BLUETOOTH_CONNECT,
+                                    Manifest.permission.BLUETOOTH_SCAN,
+                                    Manifest.permission.ACCESS_FINE_LOCATION
+                                )
+                            } else {
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION
+                                )
+                            }
+                            permissionLauncher.launch(requiredPermissions)
     }
     
     LaunchedEffect(scanKey) {

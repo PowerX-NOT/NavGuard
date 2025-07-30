@@ -42,6 +42,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.foundation.text.ClickableText
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalUriHandler
@@ -744,159 +746,6 @@ fun EmergencyTerminalScreen(
     }
 }
 
-@Composable
-fun MessageItem(messageDisplay: MessageDisplay) {
-    val message = messageDisplay.message
-    val isSent = messageDisplay.isSent
-    val uriHandler = LocalUriHandler.current
-    
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 1.dp),
-        horizontalAlignment = if (isSent) Alignment.End else Alignment.Start
-    ) {
-        // Message bubble with dynamic width based on text length
-        Card(
-            modifier = Modifier
-                .widthIn(
-                    min = 60.dp,
-                    max = when {
-                        message.content.length > 150 -> 350.dp
-                        message.content.length > 100 -> 300.dp
-                        message.content.length > 50 -> 250.dp
-                        message.content.length > 20 -> 180.dp
-                        message.content.length > 10 -> 120.dp
-                        else -> 80.dp
-                    }
-                )
-                .padding(horizontal = 6.dp),
-            shape = RoundedCornerShape(
-                topStart = 12.dp,
-                topEnd = 12.dp,
-                bottomStart = if (isSent) 12.dp else 4.dp,
-                bottomEnd = if (isSent) 4.dp else 12.dp
-            ),
-            colors = CardDefaults.cardColors(
-                containerColor = when {
-                    message.isEmergency() -> Color(0xFFFFEBEE) // Light red for emergency
-                    isSent -> MaterialTheme.colorScheme.primaryContainer
-                    else -> MaterialTheme.colorScheme.surfaceVariant
-                }
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(8.dp)
-            ) {
-                // Message content
-                Text(
-                    text = message.content,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = when {
-                        message.isEmergency() -> Color(0xFFD32F2F) // Dark red for emergency text
-                        isSent -> MaterialTheme.colorScheme.onPrimaryContainer
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
-                
-                // Location info if available (compact)
-                if (message.hasLocation()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "Location",
-                            tint = Color(0xFF2196F3).copy(alpha = 0.8f), // Blue color
-                            modifier = Modifier.size(10.dp)
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    val url = message.getGoogleMapsUrl()
-                                    if (url.isNotEmpty()) {
-                                        uriHandler.openUri(url)
-                                    }
-                                }
-                        ) {
-                            Text(
-                                text = message.getLocationDisplayText(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF2196F3).copy(alpha = 0.9f), // Blue hyperlink color
-                                fontSize = 10.sp,
-                                textDecoration = TextDecoration.Underline,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Icon(
-                                imageVector = Icons.Default.OpenInNew,
-                                contentDescription = "Open in Maps",
-                                tint = Color(0xFF2196F3).copy(alpha = 0.7f), // Blue color
-                                modifier = Modifier.size(8.dp)
-                            )
-                        }
-                    }
-                }
-                
-                // Emergency indicator (compact)
-                if (message.isEmergency()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Warning,
-                            contentDescription = "Emergency",
-                            tint = Color(0xFFFF5722),
-                            modifier = Modifier.size(10.dp)
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Text(
-                            text = "EMERGENCY",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFFF5722),
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp
-                        )
-                    }
-                }
-                
-                // Timestamp inside the bubble
-                Spacer(modifier = Modifier.height(2.dp))
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
-                            shape = RoundedCornerShape(4.dp)
-                        )
-                        .padding(horizontal = 4.dp, vertical = 1.dp)
-                ) {
-                    Text(
-                        text = getTimeOnly(message.timestamp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = when {
-                            message.isEmergency() -> Color(0xFFD32F2F).copy(alpha = 0.9f) // Dark red for emergency
-                            isSent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)
-                        },
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        }
-    }
-}
-
 // Helper function to get time only (HH:mm format)
 private fun getTimeOnly(timestamp: Long): String {
     val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
@@ -1036,5 +885,224 @@ private fun parseReceivedMessage(data: String): EmergencyMessage? {
         }
     } catch (e: Exception) {
         null
+    }
+}
+
+// Helper function to detect URLs in text
+private fun extractUrls(text: String): List<Pair<IntRange, String>> {
+    val urlPattern = Regex("""https?://[^\s]+""")
+    return urlPattern.findAll(text).map { match ->
+        match.range to match.value
+    }.toList()
+}
+
+// Helper function to create clickable text with links
+@Composable
+private fun ClickableTextWithLinks(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    val uriHandler = LocalUriHandler.current
+    val urls = extractUrls(text)
+    
+    if (urls.isEmpty()) {
+        // No URLs found, display as regular text
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodySmall,
+            color = color,
+            modifier = modifier
+        )
+    } else {
+        // URLs found, create clickable text
+        val annotatedString = buildAnnotatedString {
+            var lastIndex = 0
+            urls.forEach { (range, url) ->
+                // Add text before the URL
+                if (range.first > lastIndex) {
+                    append(text.substring(lastIndex, range.first))
+                }
+                // Add the URL with clickable annotation
+                withStyle(
+                    style = SpanStyle(
+                        color = Color(0xFF2196F3), // Blue color for links
+                        textDecoration = TextDecoration.Underline
+                    )
+                ) {
+                    append(url)
+                }
+                lastIndex = range.last + 1
+            }
+            // Add remaining text after the last URL
+            if (lastIndex < text.length) {
+                append(text.substring(lastIndex))
+            }
+        }
+        
+        ClickableText(
+            text = annotatedString,
+            style = MaterialTheme.typography.bodySmall.copy(color = color),
+            modifier = modifier,
+            onClick = { offset ->
+                urls.forEach { (range, url) ->
+                    if (offset in range) {
+                        uriHandler.openUri(url)
+                    }
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun MessageItem(messageDisplay: MessageDisplay) {
+    val message = messageDisplay.message
+    val isSent = messageDisplay.isSent
+    val uriHandler = LocalUriHandler.current
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 1.dp),
+        horizontalAlignment = if (isSent) Alignment.End else Alignment.Start
+    ) {
+        // Message bubble with dynamic width based on text length
+        Card(
+            modifier = Modifier
+                .widthIn(
+                    min = 60.dp,
+                    max = when {
+                        message.content.length > 150 -> 350.dp
+                        message.content.length > 100 -> 300.dp
+                        message.content.length > 50 -> 250.dp
+                        message.content.length > 20 -> 180.dp
+                        message.content.length > 10 -> 120.dp
+                        else -> 80.dp
+                    }
+                )
+                .padding(horizontal = 6.dp),
+            shape = RoundedCornerShape(
+                topStart = 12.dp,
+                topEnd = 12.dp,
+                bottomStart = if (isSent) 12.dp else 4.dp,
+                bottomEnd = if (isSent) 4.dp else 12.dp
+            ),
+            colors = CardDefaults.cardColors(
+                containerColor = when {
+                    message.isEmergency() -> Color(0xFFFFEBEE) // Light red for emergency
+                    isSent -> MaterialTheme.colorScheme.primaryContainer
+                    else -> MaterialTheme.colorScheme.surfaceVariant
+                }
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(8.dp)
+            ) {
+                // Message content with clickable links
+                ClickableTextWithLinks(
+                    text = message.content,
+                    color = when {
+                        message.isEmergency() -> Color(0xFFD32F2F) // Dark red for emergency text
+                        isSent -> MaterialTheme.colorScheme.onPrimaryContainer
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                // Location info if available (compact)
+                if (message.hasLocation()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Location",
+                            tint = Color(0xFF2196F3).copy(alpha = 0.8f), // Blue color
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .weight(1f)
+                                .clickable {
+                                    val url = message.getGoogleMapsUrl()
+                                    if (url.isNotEmpty()) {
+                                        uriHandler.openUri(url)
+                                    }
+                                }
+                        ) {
+                            Text(
+                                text = message.getLocationDisplayText(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF2196F3).copy(alpha = 0.9f), // Blue hyperlink color
+                                fontSize = 10.sp,
+                                textDecoration = TextDecoration.Underline,
+                                fontWeight = FontWeight.Medium
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Icon(
+                                imageVector = Icons.Default.OpenInNew,
+                                contentDescription = "Open in Maps",
+                                tint = Color(0xFF2196F3).copy(alpha = 0.7f), // Blue color
+                                modifier = Modifier.size(8.dp)
+                            )
+                        }
+                    }
+                }
+                
+                // Emergency indicator (compact)
+                if (message.isEmergency()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Emergency",
+                            tint = Color(0xFFFF5722),
+                            modifier = Modifier.size(10.dp)
+                        )
+                        Spacer(modifier = Modifier.width(2.dp))
+                        Text(
+                            text = "EMERGENCY",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color(0xFFFF5722),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                    }
+                }
+                
+                // Timestamp inside the bubble
+                Spacer(modifier = Modifier.height(2.dp))
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.End)
+                        .background(
+                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                ) {
+                    Text(
+                        text = getTimeOnly(message.timestamp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when {
+                            message.isEmergency() -> Color(0xFFD32F2F).copy(alpha = 0.9f) // Dark red for emergency
+                            isSent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)
+                        },
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
     }
 }

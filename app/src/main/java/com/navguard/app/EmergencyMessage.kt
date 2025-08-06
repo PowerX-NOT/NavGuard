@@ -13,13 +13,21 @@ data class EmergencyMessage(
     val longitude: Double = 0.0,
     val timestamp: Long = System.currentTimeMillis(),
     var hopCount: Int = 0,
-    var relayPath: Array<String> = emptyArray()
+    var relayPath: Array<String> = emptyArray(),
+    var status: MessageStatus = MessageStatus.SENDING
 ) {
     enum class MessageType {
         REGULAR,
         EMERGENCY,
         SOS,
         RELAY
+    }
+    
+    enum class MessageStatus(val code: Int, val symbol: String, val description: String) {
+        SENDING(0, "⏳", "Sending..."),
+        SENT(1, "✔", "Sent"),
+        DELIVERED(2, "✔✔", "Delivered"),
+        READ(3, "✔✔", "Read")
     }
     
     fun hasLocation(): Boolean = latitude != 0.0 && longitude != 0.0
@@ -59,6 +67,20 @@ data class EmergencyMessage(
     
     fun isEmergency(): Boolean = type == MessageType.EMERGENCY || type == MessageType.SOS
     
+    fun updateStatus(newStatus: MessageStatus) {
+        status = newStatus
+    }
+    
+    fun getStatusSymbol(): String = status.symbol
+    
+    fun getStatusDescription(): String = status.description
+    
+    fun isRead(): Boolean = status == MessageStatus.READ
+    
+    fun isDelivered(): Boolean = status == MessageStatus.DELIVERED || status == MessageStatus.READ
+    
+    fun isSent(): Boolean = status == MessageStatus.SENT || status == MessageStatus.DELIVERED || status == MessageStatus.READ
+    
     override fun toString(): String {
         val sb = StringBuilder()
         sb.append("[${type.name}] ")
@@ -73,6 +95,7 @@ data class EmergencyMessage(
         if (hopCount > 0) {
             sb.append(" [Relayed ${hopCount}x]")
         }
+        sb.append(" [${status.description}]")
         return sb.toString()
     }
 
@@ -92,6 +115,7 @@ data class EmergencyMessage(
         if (timestamp != other.timestamp) return false
         if (hopCount != other.hopCount) return false
         if (!relayPath.contentEquals(other.relayPath)) return false
+        if (status != other.status) return false
 
         return true
     }
@@ -107,6 +131,7 @@ data class EmergencyMessage(
         result = 31 * result + timestamp.hashCode()
         result = 31 * result + hopCount
         result = 31 * result + relayPath.contentHashCode()
+        result = 31 * result + status.hashCode()
         return result
     }
 }

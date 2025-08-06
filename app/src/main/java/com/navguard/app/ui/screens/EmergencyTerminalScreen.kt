@@ -112,6 +112,29 @@ fun EmergencyTerminalScreen(
     // Chat persistence manager
     val chatManager = remember { ChatPersistenceManager(context) }
     
+    // Function to handle acknowledgment messages
+    fun handleAcknowledgment(ackText: String) {
+        try {
+            val parts = ackText.trim().split("|")
+            if (parts.size >= 3) {
+                val messageId = parts[1]
+                val statusCode = parts[2].toIntOrNull()
+                
+                if (statusCode != null) {
+                    val newStatus = EmergencyMessage.MessageStatus.values().find { it.code == statusCode }
+                    if (newStatus != null) {
+                        // Update the message status in the list
+                        messages = updateMessageStatus(messageId, newStatus, messages)
+                        // Save updated messages
+                        chatManager.saveMessages(deviceAddress, messages)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Handle parsing error
+        }
+    }
+    
     // Storage permission launcher
     val storagePermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -145,12 +168,20 @@ fun EmergencyTerminalScreen(
             
             override fun onSerialRead(data: ByteArray) {
                 val receivedText = String(data)
-                // Parse received emergency message
-                parseReceivedMessage(receivedText)?.let { msg ->
-                    val newMessages = messages + MessageDisplay(msg, false)
-                    messages = newMessages
-                    // Save messages immediately
-                    chatManager.saveMessages(deviceAddress, newMessages)
+                // Check if this is an acknowledgment message
+                if (receivedText.startsWith("ACK|")) {
+                    handleAcknowledgment(receivedText)
+                } else {
+                    // Parse received emergency message
+                    parseReceivedMessage(receivedText)?.let { msg ->
+                        val newMessages = messages + MessageDisplay(msg, false)
+                        messages = newMessages
+                        // Save messages immediately
+                        chatManager.saveMessages(deviceAddress, newMessages)
+                        
+                        // Send acknowledgment for received message
+                        sendAcknowledgment(msg.messageId, EmergencyMessage.MessageStatus.DELIVERED, service)
+                    }
                 }
             }
             
@@ -159,11 +190,22 @@ fun EmergencyTerminalScreen(
                 for (data in datas) {
                     sb.append(String(data))
                 }
-                parseReceivedMessage(sb.toString())?.let { msg ->
-                    val newMessages = messages + MessageDisplay(msg, false)
-                    messages = newMessages
-                    // Save messages immediately
-                    chatManager.saveMessages(deviceAddress, newMessages)
+                val receivedText = sb.toString()
+                
+                // Check if this is an acknowledgment message
+                if (receivedText.startsWith("ACK|")) {
+                    handleAcknowledgment(receivedText)
+                } else {
+                    // Parse received emergency message
+                    parseReceivedMessage(receivedText)?.let { msg ->
+                        val newMessages = messages + MessageDisplay(msg, false)
+                        messages = newMessages
+                        // Save messages immediately
+                        chatManager.saveMessages(deviceAddress, newMessages)
+                        
+                        // Send acknowledgment for received message
+                        sendAcknowledgment(msg.messageId, EmergencyMessage.MessageStatus.DELIVERED, service)
+                    }
                 }
             }
             
@@ -528,7 +570,13 @@ fun EmergencyTerminalScreen(
                         
                         // Messages for this date
                         items(dayMessages) { messageDisplay ->
-                            MessageItem(messageDisplay)
+                            MessageItem(
+                                messageDisplay = messageDisplay,
+                                onMessageRead = { messageId ->
+                                    // Send read acknowledgment
+                                    sendAcknowledgment(messageId, EmergencyMessage.MessageStatus.READ, service)
+                                }
+                            )
                         }
                     }
                 }
@@ -785,13 +833,17 @@ private fun sendRegularMessage(
 ) {
     val emergencyMessage = EmergencyMessage(
         content = message,
-        type = EmergencyMessage.MessageType.REGULAR
+        type = EmergencyMessage.MessageType.REGULAR,
+        status = EmergencyMessage.MessageStatus.SENDING
     )
     
     // Send via Bluetooth
     try {
         val messageData = formatMessageForTransmission(emergencyMessage)
         service?.write(messageData.toByteArray())
+        
+        // Update status to sent after successful transmission
+        emergencyMessage.updateStatus(EmergencyMessage.MessageStatus.SENT)
     } catch (e: IOException) {
         // Handle send error
     }
@@ -813,13 +865,17 @@ private fun sendEmergencyMessage(
                 content = message,
                 type = EmergencyMessage.MessageType.EMERGENCY,
                 latitude = latitude,
-                longitude = longitude
+                longitude = longitude,
+                status = EmergencyMessage.MessageStatus.SENDING
             )
             
             // Send via Bluetooth
             try {
                 val messageData = formatMessageForTransmission(emergencyMessage)
                 service?.write(messageData.toByteArray())
+                
+                // Update status to sent after successful transmission
+                emergencyMessage.updateStatus(EmergencyMessage.MessageStatus.SENT)
             } catch (e: IOException) {
                 // Handle send error
             }
@@ -831,13 +887,17 @@ private fun sendEmergencyMessage(
         override fun onLocationError(error: String) {
             val emergencyMessage = EmergencyMessage(
                 content = message,
-                type = EmergencyMessage.MessageType.EMERGENCY
+                type = EmergencyMessage.MessageType.EMERGENCY,
+                status = EmergencyMessage.MessageStatus.SENDING
             )
             
             // Send via Bluetooth
             try {
                 val messageData = formatMessageForTransmission(emergencyMessage)
                 service?.write(messageData.toByteArray())
+                
+                // Update status to sent after successful transmission
+                emergencyMessage.updateStatus(EmergencyMessage.MessageStatus.SENT)
             } catch (e: IOException) {
                 // Handle send error
             }
@@ -862,15 +922,15 @@ private fun isBluetoothEnabled(): Boolean {
 }
 
 private fun formatMessageForTransmission(message: EmergencyMessage): String {
-    return "${message.type.name}|${message.content}|${message.latitude}|${message.longitude}|${message.timestamp}"
+    return "${message.type.name}|${message.content}|${message.latitude}|${message.longitude}|${message.timestamp}|${message.messageId}|${message.status.code}"
 }
 
 private fun parseReceivedMessage(data: String): EmergencyMessage? {
     return try {
         val parts = data.trim().split("|")
-        if (parts.size >= 5) {
+        if (parts.size >= 7) {
+            // Full message format with status
             val content = parts[1]
-            // Don't create message if content is empty
             if (content.isBlank()) {
                 return null
             }
@@ -879,22 +939,84 @@ private fun parseReceivedMessage(data: String): EmergencyMessage? {
                 type = EmergencyMessage.MessageType.valueOf(parts[0]),
                 latitude = parts[2].toDoubleOrNull() ?: 0.0,
                 longitude = parts[3].toDoubleOrNull() ?: 0.0,
-                timestamp = parts[4].toLongOrNull() ?: System.currentTimeMillis()
+                timestamp = parts[4].toLongOrNull() ?: System.currentTimeMillis(),
+                messageId = parts[5],
+                status = EmergencyMessage.MessageStatus.values().find { it.code == parts[6].toIntOrNull() } ?: EmergencyMessage.MessageStatus.SENDING
+            )
+        } else if (parts.size >= 6) {
+            // Message with ID but no status (legacy format)
+            val content = parts[1]
+            if (content.isBlank()) {
+                return null
+            }
+            EmergencyMessage(
+                content = content,
+                type = EmergencyMessage.MessageType.valueOf(parts[0]),
+                latitude = parts[2].toDoubleOrNull() ?: 0.0,
+                longitude = parts[3].toDoubleOrNull() ?: 0.0,
+                timestamp = parts[4].toLongOrNull() ?: System.currentTimeMillis(),
+                messageId = parts[5],
+                status = EmergencyMessage.MessageStatus.SENDING
+            )
+        } else if (parts.size >= 5) {
+            // Legacy format without message ID
+            val content = parts[1]
+            if (content.isBlank()) {
+                return null
+            }
+            EmergencyMessage(
+                content = content,
+                type = EmergencyMessage.MessageType.valueOf(parts[0]),
+                latitude = parts[2].toDoubleOrNull() ?: 0.0,
+                longitude = parts[3].toDoubleOrNull() ?: 0.0,
+                timestamp = parts[4].toLongOrNull() ?: System.currentTimeMillis(),
+                status = EmergencyMessage.MessageStatus.SENDING
             )
         } else {
-            // Fallback for simple text messages
+            // Simple text message
             val trimmedData = data.trim()
-            // Don't create message if data is empty
             if (trimmedData.isBlank()) {
                 return null
             }
             EmergencyMessage(
                 content = trimmedData,
-                type = EmergencyMessage.MessageType.REGULAR
+                type = EmergencyMessage.MessageType.REGULAR,
+                status = EmergencyMessage.MessageStatus.SENDING
             )
         }
     } catch (e: Exception) {
         null
+    }
+}
+
+// Function to send acknowledgment messages
+private fun sendAcknowledgment(
+    messageId: String,
+    status: EmergencyMessage.MessageStatus,
+    service: SerialService?
+) {
+    try {
+        val ackMessage = "ACK|$messageId|${status.code}"
+        service?.write(ackMessage.toByteArray())
+    } catch (e: IOException) {
+        // Handle send error
+    }
+}
+
+// Function to update message status in the list
+private fun updateMessageStatus(
+    messageId: String,
+    newStatus: EmergencyMessage.MessageStatus,
+    messages: List<MessageDisplay>
+): List<MessageDisplay> {
+    return messages.map { messageDisplay ->
+        if (messageDisplay.message.messageId == messageId) {
+            messageDisplay.copy(
+                message = messageDisplay.message.copy(status = newStatus)
+            )
+        } else {
+            messageDisplay
+        }
     }
 }
 
@@ -966,10 +1088,14 @@ private fun ClickableTextWithLinks(
 }
 
 @Composable
-fun MessageItem(messageDisplay: MessageDisplay) {
+fun MessageItem(
+    messageDisplay: MessageDisplay,
+    onMessageRead: (String) -> Unit
+) {
     val message = messageDisplay.message
     val isSent = messageDisplay.isSent
     val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
     
     // Don't display message if content is empty
     if (message.content.isBlank()) {
@@ -996,7 +1122,18 @@ fun MessageItem(messageDisplay: MessageDisplay) {
                         else -> 80.dp
                     }
                 )
-                .padding(horizontal = 6.dp),
+                .padding(horizontal = 6.dp)
+                .clickable(
+                    enabled = !isSent && !message.isRead(),
+                    onClick = {
+                        // Mark received message as read
+                        if (!isSent && !message.isRead()) {
+                            message.updateStatus(EmergencyMessage.MessageStatus.READ)
+                            // Send read acknowledgment
+                            onMessageRead(message.messageId)
+                        }
+                    }
+                ),
             shape = RoundedCornerShape(
                 topStart = 12.dp,
                 topEnd = 12.dp,
@@ -1094,28 +1231,50 @@ fun MessageItem(messageDisplay: MessageDisplay) {
                     }
                 }
                 
-                // Timestamp inside the bubble
+                // Status and timestamp row
                 Spacer(modifier = Modifier.height(2.dp))
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.End)
-                        .background(
-                            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
-                            shape = RoundedCornerShape(4.dp)
-                        )
-                        .padding(horizontal = 4.dp, vertical = 1.dp)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = getTimeOnly(message.timestamp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = when {
-                            message.isEmergency() -> Color(0xFFD32F2F).copy(alpha = 0.9f) // Dark red for emergency
-                            isSent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)
-                        },
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    // Status indicator (only for sent messages)
+                    if (isSent) {
+                        Text(
+                            text = message.getStatusSymbol(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = when (message.status) {
+                                EmergencyMessage.MessageStatus.READ -> Color(0xFF2196F3) // Blue for read
+                                EmergencyMessage.MessageStatus.DELIVERED -> MaterialTheme.colorScheme.onPrimaryContainer
+                                EmergencyMessage.MessageStatus.SENT -> MaterialTheme.colorScheme.onPrimaryContainer
+                                EmergencyMessage.MessageStatus.SENDING -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                            },
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    
+                    // Timestamp
+                    Box(
+                        modifier = Modifier
+                            .background(
+                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = getTimeOnly(message.timestamp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = when {
+                                message.isEmergency() -> Color(0xFFD32F2F).copy(alpha = 0.9f) // Dark red for emergency
+                                isSent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)
+                            },
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
         }

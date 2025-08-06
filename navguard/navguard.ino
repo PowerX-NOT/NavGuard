@@ -43,8 +43,18 @@ void loop() {
     msg.trim();
     if (msg.length() > 0) {
       Serial.println("📤 BT → LoRa: " + msg);
-      String cmd = "AT+SEND=" + targetAddress + "," + String(msg.length()) + "," + msg + "\r\n";
-      LoRaSerial.print(cmd);
+      
+      // Check if this is an acknowledgment message
+      if (msg.startsWith("ACK|")) {
+        // Forward acknowledgment message to LoRa
+        String cmd = "AT+SEND=" + targetAddress + "," + String(msg.length()) + "," + msg + "\r\n";
+        LoRaSerial.print(cmd);
+        Serial.println("📤 Forwarding ACK to LoRa");
+      } else {
+        // Regular message
+        String cmd = "AT+SEND=" + targetAddress + "," + String(msg.length()) + "," + msg + "\r\n";
+        LoRaSerial.print(cmd);
+      }
     }
   }
 
@@ -70,12 +80,26 @@ void loop() {
 
         blinkLED();  // Blink blue LED once
 
-        if (BT.hasClient()) {
-          BT.print(message);
-          BT.print("\r\n");
-          Serial.println("📲 Sent to Bluetooth");
+        // Check if this is an acknowledgment message
+        if (message.startsWith("ACK|")) {
+          // Forward acknowledgment to Bluetooth
+          if (BT.hasClient()) {
+            BT.print(message);
+            BT.print("\r\n");
+            Serial.println("📲 Sent ACK to Bluetooth");
+          }
         } else {
-          ringBuzzer();
+          // Regular message - send to Bluetooth and send acknowledgment
+          if (BT.hasClient()) {
+            BT.print(message);
+            BT.print("\r\n");
+            Serial.println("📲 Sent message to Bluetooth");
+            
+            // Send acknowledgment for received message
+            sendAcknowledgment(message);
+          } else {
+            ringBuzzer();
+          }
         }
       }
     }
@@ -91,6 +115,40 @@ void sendAT(String cmd) {
     res.trim();
     if (res.length() > 0 && !res.startsWith("+")) {
       Serial.println("🔧 " + res);
+    }
+  }
+}
+
+// 📨 Send acknowledgment for received message
+void sendAcknowledgment(String message) {
+  // Parse message to extract message ID
+  int pipeCount = 0;
+  int lastPipeIndex = -1;
+  
+  for (int i = 0; i < message.length(); i++) {
+    if (message.charAt(i) == '|') {
+      pipeCount++;
+      lastPipeIndex = i;
+    }
+  }
+  
+  // If message has enough parts, extract message ID
+  if (pipeCount >= 5) {
+    // Find the message ID (5th part after splitting by |)
+    int pipe1 = message.indexOf('|');
+    int pipe2 = message.indexOf('|', pipe1 + 1);
+    int pipe3 = message.indexOf('|', pipe2 + 1);
+    int pipe4 = message.indexOf('|', pipe3 + 1);
+    int pipe5 = message.indexOf('|', pipe4 + 1);
+    
+    if (pipe5 > 0) {
+      String messageId = message.substring(pipe4 + 1, pipe5);
+      
+      // Send acknowledgment with status code 2 (DELIVERED)
+      String ackMessage = "ACK|" + messageId + "|2";
+      String cmd = "AT+SEND=" + targetAddress + "," + String(ackMessage.length()) + "," + ackMessage + "\r\n";
+      LoRaSerial.print(cmd);
+      Serial.println("📨 Sent ACK: " + ackMessage);
     }
   }
 }

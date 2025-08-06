@@ -24,7 +24,9 @@ class ChatPersistenceManager(private val context: Context) {
         val latitude: Double,
         val longitude: Double,
         val timestamp: Long,
-        val isSent: Boolean
+        val isSent: Boolean,
+        val status: String = EmergencyMessage.MessageStatus.SENDING.name,
+        val messageId: String = ""
     )
     
     fun saveMessages(deviceAddress: String, messages: List<MessageDisplay>) {
@@ -36,7 +38,9 @@ class ChatPersistenceManager(private val context: Context) {
                     latitude = messageDisplay.message.latitude,
                     longitude = messageDisplay.message.longitude,
                     timestamp = messageDisplay.message.timestamp,
-                    isSent = messageDisplay.isSent
+                    isSent = messageDisplay.isSent,
+                    status = messageDisplay.message.status.name,
+                    messageId = messageDisplay.message.messageId
                 )
             }
             
@@ -57,11 +61,17 @@ class ChatPersistenceManager(private val context: Context) {
                 
                 val messages = storedMessages.map { stored ->
                     val emergencyMessage = EmergencyMessage(
+                        messageId = stored.messageId.ifEmpty { java.util.UUID.randomUUID().toString() },
                         content = stored.content,
                         type = EmergencyMessage.MessageType.valueOf(stored.type),
                         latitude = stored.latitude,
                         longitude = stored.longitude,
-                        timestamp = stored.timestamp
+                        timestamp = stored.timestamp,
+                        status = try {
+                            EmergencyMessage.MessageStatus.valueOf(stored.status)
+                        } catch (e: Exception) {
+                            EmergencyMessage.MessageStatus.SENDING
+                        }
                     )
                     MessageDisplay(emergencyMessage, stored.isSent)
                 }

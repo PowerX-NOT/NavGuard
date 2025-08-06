@@ -1235,27 +1235,12 @@ fun MessageItem(
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = if (isSent) Arrangement.End else Arrangement.Start,
+                    verticalAlignment = Alignment.Bottom
                 ) {
-                    // Status indicator (only for sent messages)
-                    if (isSent) {
-                        Text(
-                            text = message.getStatusSymbol(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = when (message.status) {
-                                EmergencyMessage.MessageStatus.READ -> Color(0xFF2196F3) // Blue for read
-                                EmergencyMessage.MessageStatus.DELIVERED -> MaterialTheme.colorScheme.onPrimaryContainer
-                                EmergencyMessage.MessageStatus.SENT -> MaterialTheme.colorScheme.onPrimaryContainer
-                                EmergencyMessage.MessageStatus.SENDING -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-                            },
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                    
-                    // Timestamp
-                    Box(
+                    // Group status ticks and time together at the bottom-right
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .background(
                                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
@@ -1263,11 +1248,26 @@ fun MessageItem(
                             )
                             .padding(horizontal = 4.dp, vertical = 1.dp)
                     ) {
+                        if (isSent) {
+                            Text(
+                                text = message.getStatusSymbol(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = when (message.status) {
+                                    EmergencyMessage.MessageStatus.READ -> Color(0xFF2196F3)
+                                    EmergencyMessage.MessageStatus.DELIVERED -> MaterialTheme.colorScheme.onPrimaryContainer
+                                    EmergencyMessage.MessageStatus.SENT -> MaterialTheme.colorScheme.onPrimaryContainer
+                                    EmergencyMessage.MessageStatus.SENDING -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                                },
+                                fontSize = 10.sp, // Reduced size for tick marks
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(end = 2.dp)
+                            )
+                        }
                         Text(
                             text = getTimeOnly(message.timestamp),
                             style = MaterialTheme.typography.bodySmall,
                             color = when {
-                                message.isEmergency() -> Color(0xFFD32F2F).copy(alpha = 0.9f) // Dark red for emergency
+                                message.isEmergency() -> Color(0xFFD32F2F).copy(alpha = 0.9f)
                                 isSent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                                 else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)
                             },

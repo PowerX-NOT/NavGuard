@@ -105,7 +105,13 @@ fun NavGuardApp() {
                     } else {
                         navController.popBackStack()
                     }
-                }
+                },
+                onOpenMap = { navController.navigate("offline_map") }
+            )
+        }
+        composable("offline_map") {
+            com.navguard.app.ui.screens.OfflineMapScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }

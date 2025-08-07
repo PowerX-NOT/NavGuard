@@ -30,6 +30,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import android.content.SharedPreferences
+import com.navguard.app.LocationManager
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +72,28 @@ fun OfflineMapScreen(
         }
     )
 
+    val locationManager = remember { LocationManager(context) }
+    var centerLatLong by remember { mutableStateOf<LatLong?>(null) }
+    var isLocating by remember { mutableStateOf(true) }
+    // On first launch, try to get current location
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            locationManager.getCurrentLocation(object : LocationManager.LocationCallback {
+                override fun onLocationReceived(latitude: Double, longitude: Double) {
+                    centerLatLong = LatLong(latitude, longitude)
+                    isLocating = false
+                }
+                override fun onLocationError(error: String) {
+                    centerLatLong = null
+                    isLocating = false
+                }
+            })
+        } else {
+            centerLatLong = null
+            isLocating = false
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -98,6 +124,14 @@ fun OfflineMapScreen(
                     Button(onClick = { openMapLauncher.launch(arrayOf("*/*")) }) {
                         Text(stringResource(id = R.string.open_map))
                     }
+                }
+            } else if (isLocating) {
+                // Show loading indicator while fetching location
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
                 }
             } else {
                 var loadError by remember { mutableStateOf(false) }
@@ -132,8 +166,9 @@ fun OfflineMapScreen(
                                 )
                                 renderLayer.setXmlRenderTheme(InternalRenderTheme.DEFAULT)
                                 mv.layerManager.layers.add(renderLayer)
-                                mv.setCenter(LatLong(52.5200, 13.4050)) // Default to Berlin
-                                mv.setZoomLevel(10)
+                                val center = centerLatLong ?: LatLong(52.5200, 13.4050)
+                                mv.setCenter(center)
+                                mv.setZoomLevel(14)
                                 mv.setBuiltInZoomControls(true)
                                 mv.mapScaleBar.isVisible = true
                                 mv

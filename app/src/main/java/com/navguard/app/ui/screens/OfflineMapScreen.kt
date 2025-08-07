@@ -34,6 +34,12 @@ import com.navguard.app.LocationManager
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
+import org.mapsforge.map.layer.overlay.Marker
+import org.mapsforge.core.graphics.Bitmap
+import androidx.core.content.res.ResourcesCompat
+import android.graphics.BitmapFactory
+import android.graphics.drawable.BitmapDrawable
+import androidx.compose.ui.unit.Density
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -171,6 +177,18 @@ fun OfflineMapScreen(
                                 mv.setZoomLevel(14)
                                 mv.setBuiltInZoomControls(true)
                                 mv.mapScaleBar.isVisible = true
+                                // Add pin marker at current location if available
+                                if (centerLatLong != null) {
+                                    // Load and scale the pin bitmap to 24x42 dp (smaller pin size)
+                                    val density = ctx.resources.displayMetrics.density
+                                    val widthPx = (24 * density).toInt()
+                                    val heightPx = (42 * density).toInt()
+                                    val pinBitmapRaw = BitmapFactory.decodeResource(ctx.resources, com.navguard.app.R.drawable.pin)
+                                    val pinBitmapScaled = android.graphics.Bitmap.createScaledBitmap(pinBitmapRaw, widthPx, heightPx, true)
+                                    val pinBitmap = AndroidGraphicFactory.convertToBitmap(BitmapDrawable(ctx.resources, pinBitmapScaled))
+                                    val marker = Marker(centerLatLong, pinBitmap, 0, -pinBitmap.height / 2)
+                                    mv.layerManager.layers.add(marker)
+                                }
                                 mv
                             } catch (e: SecurityException) {
                                 // Lost permission, trigger error state

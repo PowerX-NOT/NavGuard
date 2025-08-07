@@ -10,6 +10,8 @@
     <string name="gps_coordinates">GPS Coordinates</string>
     <string name="message_relay">Message Relay</string>
     <string name="emergency_contacts">Emergency Contacts</string>
+    <string name="open_map">Open Map</string>
+    <string name="offline_map">Offline Map</string>
 
     <string name="bluetooth_permission_title">Bluetooth permission</string>
     <string name="bluetooth_permission_grant">Bluetooth permission is required by this App. Please grant in next dialog.</string>

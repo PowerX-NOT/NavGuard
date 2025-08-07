@@ -79,6 +79,8 @@ import android.content.IntentFilter
 import androidx.compose.material.icons.filled.Bluetooth
 import android.bluetooth.BluetoothProfile
 import android.os.Build
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.ui.window.Dialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -97,6 +99,7 @@ fun EmergencyTerminalScreen(
     var showEmergencyContacts by remember { mutableStateOf(false) }
     var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
     var isDisconnecting by remember { mutableStateOf(false) }
+    var showOfflineMap by remember { mutableStateOf(false) }
     
     // Bluetooth connection state
     var service: SerialService? by remember { mutableStateOf(null) }
@@ -413,6 +416,9 @@ fun EmergencyTerminalScreen(
                     }
                     IconButton(onClick = { showDeviceStatus = true }) {
                         Icon(Icons.Default.Info, contentDescription = "Device Status")
+                    }
+                    IconButton(onClick = { showOfflineMap = true }) {
+                        Icon(Icons.Default.Map, contentDescription = "Open Map")
                     }
                 }
             )
@@ -791,6 +797,10 @@ fun EmergencyTerminalScreen(
                 }
             }
         )
+    }
+
+    if (showOfflineMap) {
+        OfflineMapDialog(onDismiss = { showOfflineMap = false })
     }
 }
 
@@ -1277,6 +1287,19 @@ fun MessageItem(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun OfflineMapDialog(onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(
+            shape = RoundedCornerShape(12.dp),
+            tonalElevation = 8.dp,
+            modifier = Modifier.fillMaxSize(0.95f)
+        ) {
+            OfflineMapScreen(onNavigateBack = onDismiss)
         }
     }
 }

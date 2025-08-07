@@ -100,6 +100,37 @@ fun OfflineMapScreen(
         }
     }
 
+    // Use continuous location updates for dynamic marker movement
+    DisposableEffect(Unit) {
+        var disposed = false
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            locationManager.requestLocationUpdates(object : LocationManager.LocationCallback {
+                override fun onLocationReceived(latitude: Double, longitude: Double) {
+                    if (!disposed) {
+                        centerLatLong = LatLong(latitude, longitude)
+                        isLocating = false
+                    }
+                }
+                override fun onLocationError(error: String) {
+                    if (!disposed) {
+                        centerLatLong = null
+                        isLocating = false
+                    }
+                }
+            })
+        } else {
+            centerLatLong = null
+            isLocating = false
+        }
+        onDispose {
+            disposed = true
+            locationManager.stopLocationUpdates()
+        }
+    }
+
+    var markerRef by remember { mutableStateOf<Marker?>(null) }
+    var hasCenteredMap by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -188,7 +219,9 @@ fun OfflineMapScreen(
                                     val pinBitmap = AndroidGraphicFactory.convertToBitmap(BitmapDrawable(ctx.resources, pinBitmapScaled))
                                     val marker = Marker(centerLatLong, pinBitmap, 0, -pinBitmap.height / 2)
                                     mv.layerManager.layers.add(marker)
+                                    markerRef = marker
                                 }
+                                hasCenteredMap = true
                                 mv
                             } catch (e: SecurityException) {
                                 // Lost permission, trigger error state
@@ -202,7 +235,10 @@ fun OfflineMapScreen(
                         },
                         modifier = Modifier.fillMaxSize(),
                         update = { mv ->
-                            // Optionally update map if needed
+                            // Only move the pin, do not recenter the map after initial load
+                            if (centerLatLong != null && markerRef != null) {
+                                markerRef?.latLong = centerLatLong
+                            }
                         }
                     )
                 }

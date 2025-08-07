@@ -54,6 +54,36 @@ class LocationManager(private val context: Context) : LocationListener {
         }
     }
     
+    fun requestLocationUpdates(callback: LocationCallback, minTimeMs: Long = 2000L, minDistanceM: Float = 2f) {
+        this.callback = callback
+        if (!hasLocationPermission()) {
+            callback.onLocationError("Location permission not granted")
+            return
+        }
+        if (!isLocationEnabled()) {
+            callback.onLocationError("GPS is disabled")
+            return
+        }
+        try {
+            locationManager.requestLocationUpdates(
+                android.location.LocationManager.GPS_PROVIDER,
+                minTimeMs,
+                minDistanceM,
+                this
+            )
+            if (locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)) {
+                locationManager.requestLocationUpdates(
+                    android.location.LocationManager.NETWORK_PROVIDER,
+                    minTimeMs,
+                    minDistanceM,
+                    this
+                )
+            }
+        } catch (e: SecurityException) {
+            callback.onLocationError("Location access denied: ${e.message}")
+        }
+    }
+    
     private fun hasLocationPermission(): Boolean {
         return ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
                ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED

@@ -174,7 +174,7 @@ fun OfflineMapScreen(
                                 mv.layerManager.layers.add(renderLayer)
                                 val center = centerLatLong ?: LatLong(52.5200, 13.4050)
                                 mv.setCenter(center)
-                                mv.setZoomLevel(14)
+                                mv.setZoomLevel(16) // Show ~200m/500ft area by default
                                 mv.setBuiltInZoomControls(true)
                                 mv.mapScaleBar.isVisible = true
                                 // Add pin marker at current location if available

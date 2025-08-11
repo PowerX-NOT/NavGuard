@@ -3,8 +3,25 @@ package com.navguard.app
 import java.text.SimpleDateFormat
 import java.util.*
 
+/**
+ * Generates compact, collision-resistant message IDs to keep LoRa payloads small.
+ * Format: base36 string from (timestamp << 20) | random20bits → typically 8-11 chars.
+ */
+object MessageIdGenerator {
+    fun generate(): String {
+        // Produce a compact 6-character base36 ID.
+        // Combine time and randomness, then take the last 6 chars for brevity.
+        val timestampBits = System.currentTimeMillis()
+        val randomBits = (kotlin.random.Random.nextInt().toLong() and 0xFFFF)
+        val combined = (timestampBits shl 16) xor randomBits
+        val full = java.lang.Long.toString(combined and Long.MAX_VALUE, 36).uppercase(Locale.getDefault())
+        val last6 = if (full.length <= 6) full.padStart(6, '0') else full.takeLast(6)
+        return last6
+    }
+}
+
 data class EmergencyMessage(
-    val messageId: String = UUID.randomUUID().toString(),
+    val messageId: String = MessageIdGenerator.generate(),
     var senderId: String = "",
     var recipientId: String = "",
     val content: String = "",

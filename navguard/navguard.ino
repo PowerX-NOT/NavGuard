@@ -10,8 +10,8 @@ HardwareSerial LoRaSerial(2);  // UART2 for RYLR998
 #define BLUE_LED    2    // Built-in blue LED on ESP32
 
 // ⚙️ Device Config — change per device
-String myAddress = "2";         // A = "1", B = "2"
-String targetAddress = "1";     // A sends to B, vice versa
+String myAddress = "1";         // A = "1", B = "2"
+String targetAddress = "2";     // A sends to B, vice versa
 
 void setup() {
   Serial.begin(115200);
@@ -51,8 +51,28 @@ void loop() {
         LoRaSerial.print(cmd);
         Serial.println("📤 Forwarding ACK to LoRa");
       } else {
-        // Regular message
-        String cmd = "AT+SEND=" + targetAddress + "," + String(msg.length()) + "," + msg + "\r\n";
+        // Regular message - compact format without timestamp:
+        // TYPE|CONTENT|LAT|LON|ID|STATUS
+        // If incoming has legacy timestamp (7 fields), strip 5th field
+        int pipeCount = 0;
+        for (int i = 0; i < msg.length(); i++) {
+          if (msg.charAt(i) == '|') pipeCount++;
+        }
+        String out = msg;
+        if (pipeCount == 6) { // 7 parts → legacy with timestamp
+          int p1 = msg.indexOf('|');
+          int p2 = msg.indexOf('|', p1 + 1);
+          int p3 = msg.indexOf('|', p2 + 1);
+          int p4 = msg.indexOf('|', p3 + 1);
+          int p5 = msg.indexOf('|', p4 + 1);
+          int p6 = msg.indexOf('|', p5 + 1);
+          int p7 = msg.indexOf('|', p6 + 1);
+          if (p7 == -1) {
+            // Build compact: TYPE|CONTENT|LAT|LON|ID|STATUS (remove TS at parts[4])
+            out = msg.substring(0, p4) + String("|") + msg.substring(p5 + 1);
+          }
+        }
+        String cmd = "AT+SEND=" + targetAddress + "," + String(out.length()) + "," + out + "\r\n";
         LoRaSerial.print(cmd);
       }
     }
@@ -89,14 +109,29 @@ void loop() {
             Serial.println("📲 Sent ACK to Bluetooth");
           }
         } else {
-          // Regular message - send to Bluetooth and send acknowledgment
+          // Regular message - ensure compact format before forwarding to Bluetooth
+          String out = message;
+          int pc = 0;
+          for (int i = 0; i < message.length(); i++) if (message.charAt(i) == '|') pc++;
+          if (pc == 6) {
+            int p1 = message.indexOf('|');
+            int p2 = message.indexOf('|', p1 + 1);
+            int p3 = message.indexOf('|', p2 + 1);
+            int p4 = message.indexOf('|', p3 + 1);
+            int p5 = message.indexOf('|', p4 + 1);
+            int p6 = message.indexOf('|', p5 + 1);
+            int p7 = message.indexOf('|', p6 + 1);
+            if (p7 == -1) {
+              out = message.substring(0, p4) + String("|") + message.substring(p5 + 1);
+            }
+          }
           if (BT.hasClient()) {
-            BT.print(message);
+            BT.print(out);
             BT.print("\r\n");
             Serial.println("📲 Sent message to Bluetooth");
             
             // Send acknowledgment for received message
-            sendAcknowledgment(message);
+            sendAcknowledgment(out);
           } else {
             ringBuzzer();
           }
@@ -121,36 +156,35 @@ void sendAT(String cmd) {
 
 // 📨 Send acknowledgment for received message
 void sendAcknowledgment(String message) {
-  // Parse message to extract message ID
-  int pipeCount = 0;
-  int lastPipeIndex = -1;
-  
-  for (int i = 0; i < message.length(); i++) {
-    if (message.charAt(i) == '|') {
-      pipeCount++;
-      lastPipeIndex = i;
-    }
+  // Extract message ID from format:
+  // TYPE|CONTENT|LAT|LON|TIMESTAMP|ID|STATUS
+  // We need the substring between 5th and 6th pipes (0-based fields → field 5)
+  int pipe1 = message.indexOf('|');
+  if (pipe1 < 0) return;
+  int pipe2 = message.indexOf('|', pipe1 + 1);
+  if (pipe2 < 0) return;
+  int pipe3 = message.indexOf('|', pipe2 + 1);
+  if (pipe3 < 0) return;
+  int pipe4 = message.indexOf('|', pipe3 + 1);
+  if (pipe4 < 0) return;
+  int pipe5 = message.indexOf('|', pipe4 + 1);
+  if (pipe5 < 0) return;
+  int pipe6 = message.indexOf('|', pipe5 + 1);
+  if (pipe6 < 0) return;
+
+  String messageId = message.substring(pipe5 + 1, pipe6);
+
+  // Trim long IDs to reduce LoRa payload size (match by prefix)
+  String shortId = messageId;
+  if (shortId.length() > 6) {
+    shortId = shortId.substring(0, 6);
   }
-  
-  // If message has enough parts, extract message ID
-  if (pipeCount >= 5) {
-    // Find the message ID (5th part after splitting by |)
-    int pipe1 = message.indexOf('|');
-    int pipe2 = message.indexOf('|', pipe1 + 1);
-    int pipe3 = message.indexOf('|', pipe2 + 1);
-    int pipe4 = message.indexOf('|', pipe3 + 1);
-    int pipe5 = message.indexOf('|', pipe4 + 1);
-    
-    if (pipe5 > 0) {
-      String messageId = message.substring(pipe4 + 1, pipe5);
-      
-      // Send acknowledgment with status code 2 (DELIVERED)
-      String ackMessage = "ACK|" + messageId + "|2";
-      String cmd = "AT+SEND=" + targetAddress + "," + String(ackMessage.length()) + "," + ackMessage + "\r\n";
-      LoRaSerial.print(cmd);
-      Serial.println("📨 Sent ACK: " + ackMessage);
-    }
-  }
+
+  // Send acknowledgment with status code 2 (DELIVERED)
+  String ackMessage = String("ACK|") + shortId + "|2";
+  String cmd = String("AT+SEND=") + targetAddress + "," + String(ackMessage.length()) + "," + ackMessage + "\r\n";
+  LoRaSerial.print(cmd);
+  Serial.println("📨 Sent ACK: " + ackMessage);
 }
 
 // 🔔 Buzzer alert if BT not connected

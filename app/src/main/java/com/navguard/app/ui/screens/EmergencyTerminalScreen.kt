@@ -120,14 +120,14 @@ fun EmergencyTerminalScreen(
         try {
             val parts = ackText.trim().split("|")
             if (parts.size >= 3) {
-                val messageId = parts[1]
+                val ackIdPrefix = parts[1]
                 val statusCode = parts[2].toIntOrNull()
                 
                 if (statusCode != null) {
                     val newStatus = EmergencyMessage.MessageStatus.values().find { it.code == statusCode }
                     if (newStatus != null) {
-                        // Update the message status in the list
-                        messages = updateMessageStatus(messageId, newStatus, messages)
+                        // Update status by matching messageId with prefix to support 6-char ACK IDs
+                        messages = updateMessageStatusByPrefix(ackIdPrefix, newStatus, messages)
                         // Save updated messages
                         chatManager.saveMessages(deviceAddress, messages)
                     }
@@ -929,18 +929,18 @@ private fun isBluetoothEnabled(): Boolean {
 }
 
 private fun formatMessageForTransmission(message: EmergencyMessage): String {
-    return "${message.type.name}|${message.content}|${message.latitude}|${message.longitude}|${message.timestamp}|${message.messageId}|${message.status.code}"
+    // Remove timestamp from transmission to reduce payload size
+    // New format (6 parts): TYPE|CONTENT|LAT|LON|ID|STATUS
+    return "${message.type.name}|${message.content}|${message.latitude}|${message.longitude}|${message.messageId}|${message.status.code}"
 }
 
 private fun parseReceivedMessage(data: String): EmergencyMessage? {
     return try {
         val parts = data.trim().split("|")
         if (parts.size >= 7) {
-            // Full message format with status
+            // Legacy full format with timestamp and status: TYPE|CONTENT|LAT|LON|TS|ID|STATUS
             val content = parts[1]
-            if (content.isBlank()) {
-                return null
-            }
+            if (content.isBlank()) return null
             EmergencyMessage(
                 content = content,
                 type = EmergencyMessage.MessageType.valueOf(parts[0]),
@@ -950,35 +950,47 @@ private fun parseReceivedMessage(data: String): EmergencyMessage? {
                 messageId = parts[5],
                 status = EmergencyMessage.MessageStatus.values().find { it.code == parts[6].toIntOrNull() } ?: EmergencyMessage.MessageStatus.SENDING
             )
-        } else if (parts.size >= 6) {
-            // Message with ID but no status (legacy format)
+        } else if (parts.size == 6) {
+            // New compact format with status: TYPE|CONTENT|LAT|LON|ID|STATUS
             val content = parts[1]
-            if (content.isBlank()) {
-                return null
-            }
+            if (content.isBlank()) return null
             EmergencyMessage(
                 content = content,
                 type = EmergencyMessage.MessageType.valueOf(parts[0]),
                 latitude = parts[2].toDoubleOrNull() ?: 0.0,
                 longitude = parts[3].toDoubleOrNull() ?: 0.0,
-                timestamp = parts[4].toLongOrNull() ?: System.currentTimeMillis(),
-                messageId = parts[5],
-                status = EmergencyMessage.MessageStatus.SENDING
+                // No timestamp transmitted; use now
+                timestamp = System.currentTimeMillis(),
+                messageId = parts[4],
+                status = EmergencyMessage.MessageStatus.values().find { it.code == parts[5].toIntOrNull() } ?: EmergencyMessage.MessageStatus.SENDING
             )
-        } else if (parts.size >= 5) {
-            // Legacy format without message ID
+        } else if (parts.size == 5) {
+            // Ambiguous 5-part legacy: could be TYPE|CONTENT|LAT|LON|ID or TYPE|CONTENT|LAT|LON|TS
             val content = parts[1]
-            if (content.isBlank()) {
-                return null
+            if (content.isBlank()) return null
+            val lastPart = parts[4]
+            val isAllDigits = lastPart.all { it.isDigit() }
+            val looksLikeTimestamp = isAllDigits && lastPart.length >= 12
+            if (looksLikeTimestamp) {
+                EmergencyMessage(
+                    content = content,
+                    type = EmergencyMessage.MessageType.valueOf(parts[0]),
+                    latitude = parts[2].toDoubleOrNull() ?: 0.0,
+                    longitude = parts[3].toDoubleOrNull() ?: 0.0,
+                    timestamp = lastPart.toLongOrNull() ?: System.currentTimeMillis(),
+                    status = EmergencyMessage.MessageStatus.SENDING
+                )
+            } else {
+                EmergencyMessage(
+                    content = content,
+                    type = EmergencyMessage.MessageType.valueOf(parts[0]),
+                    latitude = parts[2].toDoubleOrNull() ?: 0.0,
+                    longitude = parts[3].toDoubleOrNull() ?: 0.0,
+                    timestamp = System.currentTimeMillis(),
+                    messageId = lastPart,
+                    status = EmergencyMessage.MessageStatus.SENDING
+                )
             }
-            EmergencyMessage(
-                content = content,
-                type = EmergencyMessage.MessageType.valueOf(parts[0]),
-                latitude = parts[2].toDoubleOrNull() ?: 0.0,
-                longitude = parts[3].toDoubleOrNull() ?: 0.0,
-                timestamp = parts[4].toLongOrNull() ?: System.currentTimeMillis(),
-                status = EmergencyMessage.MessageStatus.SENDING
-            )
         } else {
             // Simple text message
             val trimmedData = data.trim()
@@ -1016,8 +1028,17 @@ private fun updateMessageStatus(
     newStatus: EmergencyMessage.MessageStatus,
     messages: List<MessageDisplay>
 ): List<MessageDisplay> {
+    return updateMessageStatusByPrefix(messageId, newStatus, messages)
+}
+
+private fun updateMessageStatusByPrefix(
+    messageIdPrefix: String,
+    newStatus: EmergencyMessage.MessageStatus,
+    messages: List<MessageDisplay>
+): List<MessageDisplay> {
     return messages.map { messageDisplay ->
-        if (messageDisplay.message.messageId == messageId) {
+        val mid = messageDisplay.message.messageId
+        if (mid.startsWith(messageIdPrefix)) {
             messageDisplay.copy(
                 message = messageDisplay.message.copy(status = newStatus)
             )

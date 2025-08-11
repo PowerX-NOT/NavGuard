@@ -61,7 +61,7 @@ class ChatPersistenceManager(private val context: Context) {
                 
                 val messages = storedMessages.map { stored ->
                     val emergencyMessage = EmergencyMessage(
-                        messageId = stored.messageId.ifEmpty { java.util.UUID.randomUUID().toString() },
+                        messageId = stored.messageId.ifEmpty { MessageIdGenerator.generate() },
                         content = stored.content,
                         type = EmergencyMessage.MessageType.valueOf(stored.type),
                         latitude = stored.latitude,

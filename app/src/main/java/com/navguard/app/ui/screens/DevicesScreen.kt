@@ -38,6 +38,8 @@ import android.bluetooth.BluetoothProfile
 import android.app.AlertDialog
 import android.content.DialogInterface
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import com.navguard.app.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -254,7 +256,7 @@ fun DevicesScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Emergency Devices") },
+                title = { Text(stringResource(id = R.string.app_name)) },
                 actions = {
                     IconButton(
                         onClick = { triggerScan() },

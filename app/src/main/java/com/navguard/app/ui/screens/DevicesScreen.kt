@@ -342,10 +342,20 @@ fun DevicesScreen(
                     )
                 }
             } else {
+                // Ensure connected device appears at the top of the paired list
+                val orderedPairedDevices = remember(pairedDevices, connectedDevice) {
+                    val connectedAddr = connectedDevice?.address
+                    if (connectedAddr == null) pairedDevices
+                    else {
+                        val (conn, others) = pairedDevices.partition { it.address == connectedAddr }
+                        conn + others
+                    }
+                }
+
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    if (pairedDevices.isNotEmpty()) {
+                    if (orderedPairedDevices.isNotEmpty()) {
                         item {
                             Text(
                                 text = "Paired Devices",
@@ -354,7 +364,7 @@ fun DevicesScreen(
                                 modifier = Modifier.padding(vertical = 8.dp)
                             )
                         }
-                        items(pairedDevices) { device ->
+                        items(orderedPairedDevices) { device ->
                             val isConnectedDevice = device.address == connectedDevice?.address
                             DeviceItem(
                                 device = device,

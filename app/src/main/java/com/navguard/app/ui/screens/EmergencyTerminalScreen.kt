@@ -661,72 +661,30 @@ fun EmergencyTerminalScreen(
                             singleLine = false,
                             maxLines = 3,
                             trailingIcon = {
-                                Row {
-                                    // Regular send button
-                                    IconButton(
-                                        onClick = {
-                                            if (messageText.isNotBlank()) {
-                                                sendRegularMessage(
-                                                    message = messageText,
-                                                    service = service,
-                                                    chatManager = chatManager,
-                                                    deviceAddress = deviceAddress,
-                                                    onMessageSent = { msg ->
-                                                        val newMessages = messages + MessageDisplay(msg, true)
-                                                        messages = newMessages
-                                                        chatManager.saveMessages(deviceAddress, newMessages)
-                                                        messageText = ""
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Send,
-                                            contentDescription = "Send",
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                    
-                                    // Emergency button with enhanced visibility
-                                    IconButton(
-                                        onClick = {
-                                            sendEmergencyMessage(
-                                                message = messageText.ifBlank { "EMERGENCY: Need immediate assistance!" },
+                                // Regular send button on the right
+                                IconButton(
+                                    onClick = {
+                                        if (messageText.isNotBlank()) {
+                                            sendRegularMessage(
+                                                message = messageText,
                                                 service = service,
-                                                locationManager = locationManager,
-                                                onLocationUpdate = { lat, lon ->
-                                                    locationText = "GPS: ${String.format("%.6f°N", lat)}, ${String.format("%.6f°E", lon)}"
-                                                },
+                                                chatManager = chatManager,
+                                                deviceAddress = deviceAddress,
                                                 onMessageSent = { msg ->
                                                     val newMessages = messages + MessageDisplay(msg, true)
                                                     messages = newMessages
                                                     chatManager.saveMessages(deviceAddress, newMessages)
-                                                    messages = newMessages
-                                                    chatManager.saveMessages(deviceAddress, newMessages)
                                                     messageText = ""
-                                                },
-                                                onStatusUpdate = { status ->
-                                                    connectionStatus = status
                                                 }
                                             )
-                                            // Vibrate briefly to confirm emergency button press
-                                            vibrator.vibrate(longArrayOf(0, 150), -1)
-                                        },
-                                        modifier = Modifier
-                                            .background(
-                                                color = Color(0xFFFF4500).copy(alpha = 0.1f),
-                                                shape = RoundedCornerShape(4.dp)
-                                            )
-                                            .padding(horizontal = 4.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Warning,
-                                            contentDescription = "Emergency",
-                                            tint = Color(0xFFFF4500),
-                                            modifier = Modifier.padding(4.dp)
-                                        )
+                                        }
                                     }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Send,
+                                        contentDescription = "Send",
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
                                 }
                             }
                         )

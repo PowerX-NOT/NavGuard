@@ -44,7 +44,8 @@ import androidx.compose.ui.unit.Density
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun OfflineMapScreen(
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    initialCenter: LatLong? = null
 ) {
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("offline_map_prefs", Context.MODE_PRIVATE) }
@@ -79,23 +80,27 @@ fun OfflineMapScreen(
     )
 
     val locationManager = remember { LocationManager(context) }
-    var centerLatLong by remember { mutableStateOf<LatLong?>(null) }
-    var isLocating by remember { mutableStateOf(true) }
-    // On first launch, try to get current location
+    var centerLatLong by remember { mutableStateOf<LatLong?>(initialCenter) }
+    var isLocating by remember { mutableStateOf(centerLatLong == null) }
+    // On first launch, try to get current location if not provided
     LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            locationManager.getCurrentLocation(object : LocationManager.LocationCallback {
-                override fun onLocationReceived(latitude: Double, longitude: Double) {
-                    centerLatLong = LatLong(latitude, longitude)
-                    isLocating = false
-                }
-                override fun onLocationError(error: String) {
-                    centerLatLong = null
-                    isLocating = false
-                }
-            })
+        if (centerLatLong == null) {
+            if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                locationManager.getCurrentLocation(object : LocationManager.LocationCallback {
+                    override fun onLocationReceived(latitude: Double, longitude: Double) {
+                        centerLatLong = LatLong(latitude, longitude)
+                        isLocating = false
+                    }
+                    override fun onLocationError(error: String) {
+                        centerLatLong = null
+                        isLocating = false
+                    }
+                })
+            } else {
+                centerLatLong = null
+                isLocating = false
+            }
         } else {
-            centerLatLong = null
             isLocating = false
         }
     }

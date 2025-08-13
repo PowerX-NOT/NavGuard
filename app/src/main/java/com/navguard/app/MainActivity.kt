@@ -106,12 +106,23 @@ fun NavGuardApp() {
                         navController.popBackStack()
                     }
                 },
-                onOpenMap = { navController.navigate("offline_map") }
+                onOpenMap = { navController.navigate("offline_map") },
+                onOpenMapAt = { lat, lon ->
+                    navController.navigate("offline_map/$lat/$lon")
+                }
             )
         }
         composable("offline_map") {
             com.navguard.app.ui.screens.OfflineMapScreen(
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+        composable("offline_map/{lat}/{lon}") { backStackEntry ->
+            val lat = backStackEntry.arguments?.getString("lat")?.toDoubleOrNull()
+            val lon = backStackEntry.arguments?.getString("lon")?.toDoubleOrNull()
+            com.navguard.app.ui.screens.OfflineMapScreen(
+                onNavigateBack = { navController.popBackStack() },
+                initialCenter = if (lat != null && lon != null) org.mapsforge.core.model.LatLong(lat, lon) else null
             )
         }
     }

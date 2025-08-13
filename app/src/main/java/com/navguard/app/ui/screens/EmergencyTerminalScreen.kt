@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material3.*
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.runtime.*
@@ -56,6 +57,11 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.FocusInteraction
@@ -81,13 +87,17 @@ import android.bluetooth.BluetoothProfile
 import android.os.Build
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.ui.window.Dialog
+import androidx.compose.foundation.shape.CircleShape
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EmergencyTerminalScreen(
     deviceAddress: String,
     onNavigateBack: () -> Unit,
-    onOpenMap: () -> Unit
+    onOpenMap: () -> Unit,
+    onOpenMapAt: (Double, Double) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     var messages by remember { mutableStateOf<List<MessageDisplay>>(emptyList()) }
@@ -100,6 +110,12 @@ fun EmergencyTerminalScreen(
     var showEmergencyContacts by remember { mutableStateOf(false) }
     var connectedDevice by remember { mutableStateOf<BluetoothDevice?>(null) }
     var isDisconnecting by remember { mutableStateOf(false) }
+    var isLiveLocationSharing by remember { mutableStateOf(false) }
+    var isReceivingLiveLocation by remember { mutableStateOf(false) }
+    // No time limit; share until the user stops
+    var lastLiveLat by remember { mutableStateOf<Double?>(null) }
+    var lastLiveLon by remember { mutableStateOf<Double?>(null) }
+    var lastLiveSentAtMs by remember { mutableStateOf(0L) }
     
     // Bluetooth connection state
     var service: SerialService? by remember { mutableStateOf(null) }
@@ -111,6 +127,7 @@ fun EmergencyTerminalScreen(
     val focusManager = LocalFocusManager.current
     val coroutineScope = rememberCoroutineScope()
     var isInputFocused by remember { mutableStateOf(false) }
+    var liveLoopJob: Job? by remember { mutableStateOf(null) }
     
     // Chat persistence manager
     val chatManager = remember { ChatPersistenceManager(context) }
@@ -177,13 +194,22 @@ fun EmergencyTerminalScreen(
                 } else {
                     // Parse received emergency message
                     parseReceivedMessage(receivedText)?.let { msg ->
-                        val newMessages = messages + MessageDisplay(msg, false)
-                        messages = newMessages
-                        // Save messages immediately
-                        chatManager.saveMessages(deviceAddress, newMessages)
-                        
-                        // Send acknowledgment for received message
-                        sendAcknowledgment(msg.messageId, EmergencyMessage.MessageStatus.DELIVERED, service)
+                        if (msg.content == "LOC" && msg.hasLocation()) {
+                            // Receiver-side live location: show banner and center map link; do not add to chat
+                            isLiveLocationSharing = true
+                            isReceivingLiveLocation = true
+                            lastLiveLat = msg.latitude
+                            lastLiveLon = msg.longitude
+                            // Ack delivery
+                            sendAcknowledgment(msg.messageId, EmergencyMessage.MessageStatus.DELIVERED, service)
+                        } else {
+                            val newMessages = messages + MessageDisplay(msg, false)
+                            messages = newMessages
+                            // Save messages immediately
+                            chatManager.saveMessages(deviceAddress, newMessages)
+                            // Ack delivery
+                            sendAcknowledgment(msg.messageId, EmergencyMessage.MessageStatus.DELIVERED, service)
+                        }
                     }
                 }
             }
@@ -201,13 +227,22 @@ fun EmergencyTerminalScreen(
                 } else {
                     // Parse received emergency message
                     parseReceivedMessage(receivedText)?.let { msg ->
-                        val newMessages = messages + MessageDisplay(msg, false)
-                        messages = newMessages
-                        // Save messages immediately
-                        chatManager.saveMessages(deviceAddress, newMessages)
-                        
-                        // Send acknowledgment for received message
-                        sendAcknowledgment(msg.messageId, EmergencyMessage.MessageStatus.DELIVERED, service)
+                        if (msg.content == "LOC" && msg.hasLocation()) {
+                            // Receiver-side live location: show banner and center map link; do not add to chat
+                            isLiveLocationSharing = true
+                            isReceivingLiveLocation = true
+                            lastLiveLat = msg.latitude
+                            lastLiveLon = msg.longitude
+                            // Ack delivery
+                            sendAcknowledgment(msg.messageId, EmergencyMessage.MessageStatus.DELIVERED, service)
+                        } else {
+                            val newMessages = messages + MessageDisplay(msg, false)
+                            messages = newMessages
+                            // Save messages immediately
+                            chatManager.saveMessages(deviceAddress, newMessages)
+                            // Ack delivery
+                            sendAcknowledgment(msg.messageId, EmergencyMessage.MessageStatus.DELIVERED, service)
+                        }
                     }
                 }
             }
@@ -430,6 +465,64 @@ fun EmergencyTerminalScreen(
                 .padding(paddingValues)
                 .statusBarsPadding()
         ) {
+            // Live location banner (non-chat UI)
+            if (isLiveLocationSharing) {
+                // Animated live indicator
+                val pulse = rememberInfiniteTransition(label = "live-indicator").animateFloat(
+                    initialValue = 0.4f,
+                    targetValue = 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(durationMillis = 800),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "pulse"
+                )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .background(Color(0xFF4CAF50).copy(alpha = pulse.value), shape = CircleShape)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = Color(0xFF4CAF50)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isReceivingLiveLocation) "Live location receiving" else "Live location sharing",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (lastLiveLat != null && lastLiveLon != null) {
+                            TextButton(onClick = { onOpenMapAt(lastLiveLat!!, lastLiveLon!!) }) {
+                                Text("Map")
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                        }
+                        TextButton(onClick = {
+                            isLiveLocationSharing = false
+                            isReceivingLiveLocation = false
+                            lastLiveLat = null
+                            lastLiveLon = null
+                            locationManager.stopLocationUpdates()
+                        }) {
+                            Text("Stop", color = Color(0xFFD32F2F))
+                        }
+                    }
+                }
+            }
             // Compact Status Bar - Fixed to prevent flickering
             Row(
                 modifier = Modifier
@@ -660,6 +753,60 @@ fun EmergencyTerminalScreen(
                             ),
                             singleLine = false,
                             maxLines = 3,
+                            leadingIcon = {
+                                // Live location toggle at the left edge of the text bar (no chat spam)
+                                IconButton(
+                                    onClick = {
+                                        isLiveLocationSharing = !isLiveLocationSharing
+                                        if (isLiveLocationSharing) {
+                                            lastLiveSentAtMs = 0L
+                                            // Prime current location once
+                                            locationManager.getCurrentLocation(object : LocationManager.LocationCallback {
+                                                override fun onLocationReceived(latitude: Double, longitude: Double) {
+                                                    lastLiveLat = latitude
+                                                    lastLiveLon = longitude
+                                                }
+                                                override fun onLocationError(error: String) {}
+                                            })
+                                            // Start continuous GPS updates to refresh last coords (no sending here)
+                                            locationManager.requestLocationUpdates(
+                                                object : LocationManager.LocationCallback {
+                                                    override fun onLocationReceived(latitude: Double, longitude: Double) {
+                                                        locationText = "GPS: ${String.format("%.6f°N", latitude)}, ${String.format("%.6f°E", longitude)}"
+                                                        lastLiveLat = latitude
+                                                        lastLiveLon = longitude
+                                                    }
+                                                    override fun onLocationError(error: String) {
+                                                        connectionStatus = "Location error: $error"
+                                                    }
+                                                },
+                                                minTimeMs = 1000L,
+                                                minDistanceM = 0f
+                                            )
+                                            // Start a 5s loop to send LOC updates regardless of movement
+                                            liveLoopJob?.cancel()
+                                            liveLoopJob = coroutineScope.launch {
+                                                while (isActive && isLiveLocationSharing) {
+                                                    val lat = lastLiveLat
+                                                    val lon = lastLiveLon
+                                                    if (lat != null && lon != null) {
+                                                        sendLocationUpdateThrottled(lat, lon, service)
+                                                        lastLiveSentAtMs = System.currentTimeMillis()
+                                                    }
+                                                    delay(5000)
+                                                }
+                                            }
+                                        } else {
+                                            locationManager.stopLocationUpdates()
+                                            liveLoopJob?.cancel()
+                                            liveLoopJob = null
+                                        }
+                                    }
+                                ) {
+                                    val tint = if (isLiveLocationSharing) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onSurface
+                                    Icon(Icons.Default.LocationOn, contentDescription = "Share Live Location", tint = tint)
+                                }
+                            },
                             trailingIcon = {
                                 // Regular send button on the right
                                 IconButton(
@@ -696,6 +843,13 @@ fun EmergencyTerminalScreen(
         }
     }
     
+    // Ensure GPS updates are stopped when leaving the screen
+    DisposableEffect(Unit) {
+        onDispose {
+            locationManager.stopLocationUpdates()
+        }
+    }
+
     // Clear Chat Confirmation Dialog
     if (showClearDialog) {
         AlertDialog(
@@ -963,6 +1117,52 @@ private fun parseReceivedMessage(data: String): EmergencyMessage? {
         }
     } catch (e: Exception) {
         null
+    }
+}
+
+// Send a lightweight location update using existing message format
+private fun sendLocationUpdate(
+    latitude: Double,
+    longitude: Double,
+    service: SerialService?,
+    chatManager: ChatPersistenceManager,
+    deviceAddress: String,
+    onMessageSent: (EmergencyMessage) -> Unit
+) {
+    val msg = EmergencyMessage(
+        content = "LOC",
+        type = EmergencyMessage.MessageType.REGULAR,
+        latitude = latitude,
+        longitude = longitude,
+        status = EmergencyMessage.MessageStatus.SENDING
+    )
+    try {
+        val data = formatMessageForTransmission(msg)
+        service?.write(data.toByteArray())
+        msg.updateStatus(EmergencyMessage.MessageStatus.SENT)
+    } catch (_: IOException) {
+    }
+    onMessageSent(msg)
+}
+
+// Throttled location message (no chat persistence, no UI spam)
+private fun sendLocationUpdateThrottled(
+    latitude: Double,
+    longitude: Double,
+    service: SerialService?
+) {
+    // Limit messages to reduce radio usage (handled at caller by timing)
+    val msg = EmergencyMessage(
+        content = "LOC",
+        type = EmergencyMessage.MessageType.REGULAR,
+        latitude = latitude,
+        longitude = longitude,
+        status = EmergencyMessage.MessageStatus.SENDING
+    )
+    try {
+        val data = "${msg.type.name}|${msg.content}|${msg.latitude}|${msg.longitude}|${msg.messageId}|${msg.status.code}"
+        service?.write(data.toByteArray())
+    } catch (_: IOException) {
     }
 }
 

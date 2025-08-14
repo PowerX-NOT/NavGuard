@@ -67,7 +67,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.FocusInteraction
 import androidx.core.content.ContextCompat
 import com.navguard.app.EmergencyMessage
-import com.navguard.app.ChatPersistenceManager
+import com.navguard.app.PersistenceManager
 import com.navguard.app.MessageDisplay
 import com.navguard.app.LocationManager
 import com.navguard.app.SerialSocket
@@ -130,7 +130,7 @@ fun EmergencyTerminalScreen(
     var liveLoopJob: Job? by remember { mutableStateOf(null) }
     
     // Chat persistence manager
-    val chatManager = remember { ChatPersistenceManager(context) }
+    val chatManager = remember { PersistenceManager(context) }
     
     // Function to handle acknowledgment messages
     fun handleAcknowledgment(ackText: String) {
@@ -946,7 +946,7 @@ private fun formatDateForDisplay(dateString: String): String {
 private fun sendRegularMessage(
     message: String,
     service: SerialService?,
-    chatManager: ChatPersistenceManager,
+    chatManager: PersistenceManager,
     deviceAddress: String,
     onMessageSent: (EmergencyMessage) -> Unit
 ) {
@@ -1125,7 +1125,7 @@ private fun sendLocationUpdate(
     latitude: Double,
     longitude: Double,
     service: SerialService?,
-    chatManager: ChatPersistenceManager,
+    chatManager: PersistenceManager,
     deviceAddress: String,
     onMessageSent: (EmergencyMessage) -> Unit
 ) {

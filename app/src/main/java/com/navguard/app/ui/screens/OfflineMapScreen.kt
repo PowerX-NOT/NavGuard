@@ -29,7 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
-import android.content.SharedPreferences
+import com.navguard.app.PersistenceManager
 import com.navguard.app.LocationManager
 import android.Manifest
 import android.content.pm.PackageManager
@@ -48,13 +48,12 @@ fun OfflineMapScreen(
     initialCenter: LatLong? = null
 ) {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("offline_map_prefs", Context.MODE_PRIVATE) }
-    val MAP_URI_KEY = "offline_map_uri"
+    val persistence = remember { PersistenceManager(context) }
     var mapUri by remember { mutableStateOf<Uri?>(null) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
     // On first launch, try to load the saved URI
     LaunchedEffect(Unit) {
-        val uriString = prefs.getString(MAP_URI_KEY, null)
+        val uriString = persistence.getOfflineMapUri()
         if (uriString != null) {
             try {
                 mapUri = Uri.parse(uriString)
@@ -67,7 +66,7 @@ fun OfflineMapScreen(
             if (uri != null) {
                 mapUri = uri
                 // Persist the URI
-                prefs.edit().putString(MAP_URI_KEY, uri.toString()).apply()
+                persistence.setOfflineMapUri(uri.toString())
                 // Persist URI permission
                 try {
                     context.contentResolver.takePersistableUriPermission(
@@ -180,7 +179,7 @@ fun OfflineMapScreen(
                 if (loadError) {
                     // If error, clear URI and prompt user
                     LaunchedEffect(Unit) {
-                        prefs.edit().remove(MAP_URI_KEY).apply()
+                        persistence.clearOfflineMapUri()
                         mapUri = null
                         loadError = false
                     }

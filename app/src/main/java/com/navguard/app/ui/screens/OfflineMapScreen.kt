@@ -108,6 +108,7 @@ fun OfflineMapScreen(
     DisposableEffect(Unit) {
         var disposed = false
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            // Request frequent location updates for smooth real-time tracking on map
             locationManager.requestLocationUpdates(object : LocationManager.LocationCallback {
                 override fun onLocationReceived(latitude: Double, longitude: Double) {
                     if (!disposed) {
@@ -121,7 +122,7 @@ fun OfflineMapScreen(
                         isLocating = false
                     }
                 }
-            })
+            }, minTimeMs = 1000L, minDistanceM = 1f) // Update every 1 second or 1 meter for smooth tracking
         } else {
             centerLatLong = null
             isLocating = false
@@ -266,9 +267,15 @@ fun OfflineMapScreen(
                         },
                         modifier = Modifier.fillMaxSize(),
                         update = { mv ->
-                            // Only move the pin, do not recenter the map after initial load
+                            // Update the pin marker position dynamically as user moves
                             if (centerLatLong != null && markerRef != null) {
-                                markerRef?.latLong = centerLatLong
+                                val currentMarker = markerRef!!
+                                // Only update if the position actually changed to avoid unnecessary redraws
+                                if (currentMarker.latLong != centerLatLong) {
+                                    currentMarker.latLong = centerLatLong
+                                    // Force map redraw to show updated marker position in real-time
+                                    mv.layerManager.redrawLayers()
+                                }
                             }
                         }
                     )

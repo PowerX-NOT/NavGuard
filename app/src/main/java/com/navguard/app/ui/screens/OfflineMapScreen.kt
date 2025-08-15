@@ -27,7 +27,7 @@ import androidx.compose.ui.res.stringResource
 import com.navguard.app.R
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Info
 import com.navguard.app.PersistenceManager
 import com.navguard.app.LocationManager
@@ -141,7 +141,7 @@ fun OfflineMapScreen(
                 title = { Text(stringResource(id = R.string.offline_map)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -190,6 +190,20 @@ fun OfflineMapScreen(
                                 AndroidGraphicFactory.createInstance(ctx.applicationContext)
                                 val mv = MapView(ctx)
                                 mapView = mv
+                                
+                                // Configure zoom levels and constraints for smooth zooming
+                                mv.model.mapViewPosition.setZoomLevelMax(20.toByte())
+                                mv.model.mapViewPosition.setZoomLevelMin(5.toByte())
+                                
+                                // Configure smooth zoom animation settings
+                                mv.model.frameBufferModel.setOverdrawFactor(1.2)
+                                
+                                // Configure gesture detection for better responsiveness
+                                mv.setOnTouchListener { view, event ->
+                                    // Let the MapView handle the touch events natively for optimal performance
+                                    view.onTouchEvent(event)
+                                }
+                                
                                 val cache = AndroidUtil.createTileCache(
                                     ctx,
                                     "mycache",
@@ -210,8 +224,21 @@ fun OfflineMapScreen(
                                 val center = centerLatLong ?: LatLong(52.5200, 13.4050)
                                 mv.setCenter(center)
                                 mv.setZoomLevel(16) // Show ~200m/500ft area by default
+                                
+                                // Configure zoom controls for better gesture handling
                                 mv.setBuiltInZoomControls(true)
                                 mv.mapScaleBar.isVisible = true
+                                
+                                // Configure touch gesture sensitivity and smoothing
+                                mv.setClickable(true)
+                                mv.setLongClickable(true)
+                                mv.isFocusable = true
+                                mv.isFocusableInTouchMode = true
+                                
+                                // Configure display settings for better performance during zoom
+                                mv.model.displayModel.setUserScaleFactor(1.0f)
+                                mv.model.displayModel.setBackgroundColor(android.graphics.Color.parseColor("#F5F5F5"))
+                                
                                 // Add pin marker at current location if available
                                 if (centerLatLong != null) {
                                     // Load and scale the pin bitmap to 24x42 dp (smaller pin size)

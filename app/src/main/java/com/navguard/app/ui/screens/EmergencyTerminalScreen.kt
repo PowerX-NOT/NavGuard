@@ -642,9 +642,7 @@ fun EmergencyTerminalScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .background(
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-                    )
+                    .background(Color.Black)
                     .padding(vertical = 8.dp)
                     .animateContentSize(
                         animationSpec = tween(200)
@@ -732,7 +730,50 @@ fun EmergencyTerminalScreen(
                 }
             }
             
-            Divider(color = MaterialTheme.colorScheme.outline, thickness = 1.dp)
+            // Status indicator at bottom right (like modern chat apps)
+            if (messages.isNotEmpty()) {
+                val lastMessage = messages.last()
+                if (lastMessage.isSent) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.align(Alignment.BottomEnd),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = getTimeOnly(lastMessage.message.timestamp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray.copy(alpha = 0.7f),
+                                fontSize = 10.sp
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = lastMessage.message.getStatusSymbol(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = when (lastMessage.message.status) {
+                                    EmergencyMessage.MessageStatus.READ -> Color(0xFF2196F3)
+                                    EmergencyMessage.MessageStatus.DELIVERED -> Color.Gray
+                                    EmergencyMessage.MessageStatus.SENT -> Color.Gray
+                                    EmergencyMessage.MessageStatus.SENDING -> Color.Gray.copy(alpha = 0.5f)
+                                },
+                                fontSize = 10.sp
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "🔒", // Encryption indicator
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray.copy(alpha = 0.7f),
+                                fontSize = 10.sp
+                            )
+                        }
+                    }
+                }
+            }
+            
+            Divider(color = Color.Gray.copy(alpha = 0.3f), thickness = 1.dp)
             
             // Input Area with proper keyboard handling
             Card(
@@ -1326,12 +1367,12 @@ fun MessageItem(
             .padding(vertical = 1.dp),
         horizontalAlignment = if (isSent) Alignment.End else Alignment.Start
     ) {
-        // Dynamic message bubble that automatically adjusts to content
+        // Modern chat bubble design
         Card(
             modifier = Modifier
                 .wrapContentWidth()
-                .widthIn(max = 280.dp) // Only set maximum, let content determine minimum
-                .padding(horizontal = 6.dp)
+                .widthIn(max = 280.dp)
+                .padding(horizontal = 8.dp, vertical = 2.dp)
                 .clickable(
                     enabled = !isSent && !message.isRead(),
                     onClick = {
@@ -1343,84 +1384,62 @@ fun MessageItem(
                         }
                     }
                 ),
-            shape = RoundedCornerShape(
-                topStart = 12.dp,
-                topEnd = 12.dp,
-                bottomStart = if (isSent) 12.dp else 4.dp,
-                bottomEnd = if (isSent) 4.dp else 12.dp
-            ),
+            shape = RoundedCornerShape(16.dp),
             colors = CardDefaults.cardColors(
                 containerColor = when {
-                    message.isEmergency() -> Color(0xFFFFEBEE) // Light red for emergency
-                    isSent -> MaterialTheme.colorScheme.primaryContainer
-                    else -> MaterialTheme.colorScheme.surfaceVariant
+                    message.isEmergency() -> Color(0xFFFF5252) // Red for emergency
+                    isSent -> Color(0xFF2B2B2B) // Dark gray for sent messages
+                    else -> Color(0xFF424242) // Lighter gray for received messages
                 }
             ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Column(
                 modifier = Modifier
-                    .padding(8.dp)
+                    .padding(12.dp)
                     .wrapContentWidth()
             ) {
                 // Message content with clickable links
                 ClickableTextWithLinks(
                     text = message.content,
-                    color = when {
-                        message.isEmergency() -> Color(0xFFD32F2F) // Dark red for emergency text
-                        isSent -> MaterialTheme.colorScheme.onPrimaryContainer
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    color = Color.White, // White text for all messages
                     modifier = Modifier.wrapContentWidth()
                 )
                 
-                // Location info if available (compact)
+                // Location info if available (modern style)
                 if (message.hasLocation()) {
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.wrapContentWidth()
+                        modifier = Modifier
+                            .wrapContentWidth()
+                            .clickable {
+                                val url = message.getGoogleMapsUrl()
+                                if (url.isNotEmpty()) {
+                                    uriHandler.openUri(url)
+                                }
+                            }
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Info,
+                            imageVector = Icons.Default.LocationOn,
                             contentDescription = "Location",
-                            tint = Color(0xFF2196F3).copy(alpha = 0.8f), // Blue color
-                            modifier = Modifier.size(10.dp)
+                            tint = Color.White.copy(alpha = 0.8f),
+                            modifier = Modifier.size(12.dp)
                         )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .weight(1f)
-                                .clickable {
-                                    val url = message.getGoogleMapsUrl()
-                                    if (url.isNotEmpty()) {
-                                        uriHandler.openUri(url)
-                                    }
-                                }
-                        ) {
-                            Text(
-                                text = message.getLocationDisplayText(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF2196F3).copy(alpha = 0.9f), // Blue hyperlink color
-                                fontSize = 10.sp,
-                                textDecoration = TextDecoration.Underline,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Icon(
-                                imageVector = Icons.Default.OpenInNew,
-                                contentDescription = "Open in Maps",
-                                tint = Color(0xFF2196F3).copy(alpha = 0.7f), // Blue color
-                                modifier = Modifier.size(8.dp)
-                            )
-                        }
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "📍 Location",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.9f),
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
                 
-                // Emergency indicator (compact)
+                // Emergency indicator (modern style)
                 if (message.isEmergency()) {
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.wrapContentWidth()
@@ -1428,54 +1447,21 @@ fun MessageItem(
                         Icon(
                             imageVector = Icons.Default.Warning,
                             contentDescription = "Emergency",
-                            tint = Color(0xFFFF5722),
-                            modifier = Modifier.size(10.dp)
+                            tint = Color.White,
+                            modifier = Modifier.size(12.dp)
                         )
-                        Spacer(modifier = Modifier.width(2.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = "EMERGENCY",
+                            text = "🚨 EMERGENCY",
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFFFF5722),
+                            color = Color.White,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp
+                            fontSize = 11.sp
                         )
                     }
                 }
                 
-                // Status and timestamp row - natural dynamic layout
-                Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.wrapContentWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (isSent) {
-                        Text(
-                            text = message.getStatusSymbol(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = when (message.status) {
-                                EmergencyMessage.MessageStatus.READ -> Color(0xFF2196F3)
-                                EmergencyMessage.MessageStatus.DELIVERED -> MaterialTheme.colorScheme.onPrimaryContainer
-                                EmergencyMessage.MessageStatus.SENT -> MaterialTheme.colorScheme.onPrimaryContainer
-                                EmergencyMessage.MessageStatus.SENDING -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-                            },
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                    }
-                    Text(
-                        text = getTimeOnly(message.timestamp),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = when {
-                            message.isEmergency() -> Color(0xFFD32F2F).copy(alpha = 0.8f)
-                            isSent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                        },
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
+                // Remove status indicators from inside bubbles - they'll be shown at chat level
             }
         }
     }

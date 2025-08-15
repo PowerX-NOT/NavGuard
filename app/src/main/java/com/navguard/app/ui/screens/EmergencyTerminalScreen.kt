@@ -1356,6 +1356,9 @@ fun MessageItem(
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
     
+    // State to track if timestamp is visible for this message
+    var showTimestamp by remember { mutableStateOf(false) }
+    
     // Don't display message if content is empty
     if (message.content.isBlank()) {
         return
@@ -1374,9 +1377,10 @@ fun MessageItem(
                 .widthIn(max = 280.dp)
                 .padding(horizontal = 8.dp, vertical = 2.dp)
                 .clickable(
-                    enabled = !isSent && !message.isRead(),
                     onClick = {
-                        // Mark received message as read
+                        // Toggle timestamp visibility
+                        showTimestamp = !showTimestamp
+                        // Mark received message as read if needed
                         if (!isSent && !message.isRead()) {
                             message.updateStatus(EmergencyMessage.MessageStatus.READ)
                             // Send read acknowledgment
@@ -1463,6 +1467,20 @@ fun MessageItem(
                 
                 // Remove status indicators from inside bubbles - they'll be shown at chat level
             }
+        }
+        
+        // Show timestamp below bubble when clicked
+        if (showTimestamp) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = getTimeOnly(message.timestamp),
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.Gray.copy(alpha = 0.7f),
+                fontSize = 10.sp,
+                modifier = Modifier
+                    .align(if (isSent) Alignment.End else Alignment.Start)
+                    .padding(horizontal = 12.dp)
+            )
         }
     }
 }

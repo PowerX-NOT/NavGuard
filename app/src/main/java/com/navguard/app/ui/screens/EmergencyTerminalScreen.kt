@@ -98,7 +98,7 @@ fun EmergencyTerminalScreen(
     deviceAddress: String,
     onNavigateBack: () -> Unit,
     onOpenMap: () -> Unit,
-    onOpenMapAt: (Double, Double) -> Unit = { _, _ -> }
+    onOpenMapAt: (Double, Double, Boolean) -> Unit = { _, _, _ -> }
 ) {
     val context = LocalContext.current
     var messages by remember { mutableStateOf<List<MessageDisplay>>(emptyList()) }
@@ -549,7 +549,7 @@ fun EmergencyTerminalScreen(
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (lastLiveLat != null && lastLiveLon != null) {
-                            TextButton(onClick = { onOpenMapAt(lastLiveLat!!, lastLiveLon!!) }) {
+                            TextButton(onClick = { onOpenMapAt(lastLiveLat!!, lastLiveLon!!, isReceivingLiveLocation) }) {
                                 Text("Map")
                             }
                             Spacer(modifier = Modifier.width(4.dp))

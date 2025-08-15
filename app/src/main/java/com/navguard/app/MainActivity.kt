@@ -107,8 +107,8 @@ fun NavGuardApp() {
                     }
                 },
                 onOpenMap = { navController.navigate("offline_map") },
-                onOpenMapAt = { lat, lon ->
-                    navController.navigate("offline_map/$lat/$lon")
+                onOpenMapAt = { lat, lon, isLiveLocationFromOther ->
+                    navController.navigate("offline_map/$lat/$lon/$isLiveLocationFromOther")
                 }
             )
         }
@@ -123,6 +123,16 @@ fun NavGuardApp() {
             com.navguard.app.ui.screens.OfflineMapScreen(
                 onNavigateBack = { navController.popBackStack() },
                 initialCenter = if (lat != null && lon != null) org.mapsforge.core.model.LatLong(lat, lon) else null
+            )
+        }
+        composable("offline_map/{lat}/{lon}/{isLiveLocationFromOther}") { backStackEntry ->
+            val lat = backStackEntry.arguments?.getString("lat")?.toDoubleOrNull()
+            val lon = backStackEntry.arguments?.getString("lon")?.toDoubleOrNull()
+            val isLiveLocationFromOther = backStackEntry.arguments?.getString("isLiveLocationFromOther")?.toBoolean() ?: false
+            com.navguard.app.ui.screens.OfflineMapScreen(
+                onNavigateBack = { navController.popBackStack() },
+                initialCenter = if (lat != null && lon != null) org.mapsforge.core.model.LatLong(lat, lon) else null,
+                isLiveLocationFromOther = isLiveLocationFromOther
             )
         }
     }

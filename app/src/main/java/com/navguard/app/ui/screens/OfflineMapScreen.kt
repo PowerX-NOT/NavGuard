@@ -45,7 +45,8 @@ import androidx.compose.ui.unit.Density
 @Composable
 fun OfflineMapScreen(
     onNavigateBack: () -> Unit,
-    initialCenter: LatLong? = null
+    initialCenter: LatLong? = null,
+    isLiveLocationFromOther: Boolean = false
 ) {
     val context = LocalContext.current
     val persistence = remember { PersistenceManager(context) }
@@ -246,12 +247,23 @@ fun OfflineMapScreen(
                                     val density = ctx.resources.displayMetrics.density
                                     val widthPx = (24 * density).toInt()
                                     val heightPx = (42 * density).toInt()
+
+                                    // Always add your own location pin (red)
                                     val pinBitmapRaw = BitmapFactory.decodeResource(ctx.resources, com.navguard.app.R.drawable.pin)
                                     val pinBitmapScaled = android.graphics.Bitmap.createScaledBitmap(pinBitmapRaw, widthPx, heightPx, true)
                                     val pinBitmap = AndroidGraphicFactory.convertToBitmap(BitmapDrawable(ctx.resources, pinBitmapScaled))
                                     val marker = Marker(centerLatLong, pinBitmap, 0, -pinBitmap.height / 2)
                                     mv.layerManager.layers.add(marker)
                                     markerRef = marker
+
+                                    // If this is live location from someone else, also add their blue pin
+                                    if (isLiveLocationFromOther) {
+                                        val bluePinBitmapRaw = BitmapFactory.decodeResource(ctx.resources, com.navguard.app.R.drawable.pinblue)
+                                        val bluePinBitmapScaled = android.graphics.Bitmap.createScaledBitmap(bluePinBitmapRaw, widthPx, heightPx, true)
+                                        val bluePinBitmap = AndroidGraphicFactory.convertToBitmap(BitmapDrawable(ctx.resources, bluePinBitmapScaled))
+                                        val blueMarker = Marker(centerLatLong, bluePinBitmap, 0, -bluePinBitmap.height / 2)
+                                        mv.layerManager.layers.add(blueMarker)
+                                    }
                                 }
                                 hasCenteredMap = true
                                 mv

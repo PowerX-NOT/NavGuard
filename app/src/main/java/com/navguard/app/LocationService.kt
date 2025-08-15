@@ -40,6 +40,7 @@ class LocationService : Service(), LocationListener {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val sendHandler = Handler(Looper.getMainLooper())
     private var serialService: SerialService? = null
+    private var persistenceManager: PersistenceManager? = null
     private var isBoundToSerial = false
     
     interface LocationCallback {
@@ -75,6 +76,7 @@ class LocationService : Service(), LocationListener {
     override fun onCreate() {
         super.onCreate()
         locationManager = getSystemService(Context.LOCATION_SERVICE) as android.location.LocationManager
+        persistenceManager = PersistenceManager(applicationContext)
         createNotificationChannel()
     }
 

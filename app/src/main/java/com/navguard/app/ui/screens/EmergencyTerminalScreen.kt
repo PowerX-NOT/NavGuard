@@ -70,6 +70,7 @@ import com.navguard.app.EmergencyMessage
 import com.navguard.app.PersistenceManager
 import com.navguard.app.MessageDisplay
 import com.navguard.app.LocationManager
+import com.navguard.app.LocationService
 import com.navguard.app.SerialSocket
 import com.navguard.app.SerialListener
 import com.navguard.app.SerialService
@@ -191,13 +192,17 @@ fun EmergencyTerminalScreen(
                 // Check if this is an acknowledgment message
                 if (receivedText.startsWith("ACK|")) {
                     handleAcknowledgment(receivedText)
+                } else if (receivedText.startsWith("CTRL|LOC_STOP")) {
+                    // Remote signaled to stop live location
+                    isReceivingLiveLocation = false
+                    chatManager.setLiveReceivingEnabled(deviceAddress, false)
                 } else {
                     // Parse received emergency message
                     parseReceivedMessage(receivedText)?.let { msg ->
                         if (msg.content == "LOC" && msg.hasLocation()) {
                             // Receiver-side live location: show banner and center map link; do not add to chat
-                            isLiveLocationSharing = true
                             isReceivingLiveLocation = true
+                            chatManager.setLiveReceivingEnabled(deviceAddress, true)
                             lastLiveLat = msg.latitude
                             lastLiveLon = msg.longitude
                             // Ack delivery
@@ -224,13 +229,16 @@ fun EmergencyTerminalScreen(
                 // Check if this is an acknowledgment message
                 if (receivedText.startsWith("ACK|")) {
                     handleAcknowledgment(receivedText)
+                } else if (receivedText.startsWith("CTRL|LOC_STOP")) {
+                    isReceivingLiveLocation = false
+                    chatManager.setLiveReceivingEnabled(deviceAddress, false)
                 } else {
                     // Parse received emergency message
                     parseReceivedMessage(receivedText)?.let { msg ->
                         if (msg.content == "LOC" && msg.hasLocation()) {
                             // Receiver-side live location: show banner and center map link; do not add to chat
-                            isLiveLocationSharing = true
                             isReceivingLiveLocation = true
+                            chatManager.setLiveReceivingEnabled(deviceAddress, true)
                             lastLiveLat = msg.latitude
                             lastLiveLon = msg.longitude
                             // Ack delivery
@@ -287,6 +295,13 @@ fun EmergencyTerminalScreen(
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) 
             != PackageManager.PERMISSION_GRANTED) {
             storagePermissionLauncher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
+        // Restore persisted live flags
+        isLiveLocationSharing = chatManager.isLiveSharingEnabled(deviceAddress)
+        isReceivingLiveLocation = chatManager.isLiveReceivingEnabled(deviceAddress)
+        // Ensure service state matches persisted flag
+        if (isLiveLocationSharing) {
+            LocationService.startLocationSharing(context)
         }
         // Load existing messages
         messages = chatManager.loadMessages(deviceAddress)
@@ -466,7 +481,7 @@ fun EmergencyTerminalScreen(
                 .statusBarsPadding()
         ) {
             // Live location banner (non-chat UI)
-            if (isLiveLocationSharing) {
+            if (isLiveLocationSharing || isReceivingLiveLocation) {
                 // Animated live indicator
                 val pulse = rememberInfiniteTransition(label = "live-indicator").animateFloat(
                     initialValue = 0.4f,
@@ -499,7 +514,7 @@ fun EmergencyTerminalScreen(
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (isReceivingLiveLocation) "Live location receiving" else "Live location sharing",
+                            text = if (isReceivingLiveLocation && !isLiveLocationSharing) "Live location receiving" else "Live location sharing",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface
                         )
@@ -513,10 +528,18 @@ fun EmergencyTerminalScreen(
                         }
                         TextButton(onClick = {
                             isLiveLocationSharing = false
+                            chatManager.setLiveSharingEnabled(deviceAddress, false)
                             isReceivingLiveLocation = false
+                            chatManager.setLiveReceivingEnabled(deviceAddress, false)
                             lastLiveLat = null
                             lastLiveLon = null
                             locationManager.stopLocationUpdates()
+                            // Notify peer to stop receiving
+                            try {
+                                service?.write("CTRL|LOC_STOP".toByteArray())
+                            } catch (_: Exception) {}
+                            // Stop foreground service sending
+                            LocationService.stopLocationSharing(context)
                         }) {
                             Text("Stop", color = Color(0xFFD32F2F))
                         }
@@ -758,9 +781,10 @@ fun EmergencyTerminalScreen(
                                 IconButton(
                                     onClick = {
                                         isLiveLocationSharing = !isLiveLocationSharing
+                                        chatManager.setLiveSharingEnabled(deviceAddress, isLiveLocationSharing)
                                         if (isLiveLocationSharing) {
                                             lastLiveSentAtMs = 0L
-                                            // Prime current location once
+                                            // Prime location locally for UI
                                             locationManager.getCurrentLocation(object : LocationManager.LocationCallback {
                                                 override fun onLocationReceived(latitude: Double, longitude: Double) {
                                                     lastLiveLat = latitude
@@ -768,35 +792,12 @@ fun EmergencyTerminalScreen(
                                                 }
                                                 override fun onLocationError(error: String) {}
                                             })
-                                            // Start continuous GPS updates to refresh last coords (no sending here)
-                                            locationManager.requestLocationUpdates(
-                                                object : LocationManager.LocationCallback {
-                                                    override fun onLocationReceived(latitude: Double, longitude: Double) {
-                                                        locationText = "GPS: ${String.format("%.6f°N", latitude)}, ${String.format("%.6f°E", longitude)}"
-                                                        lastLiveLat = latitude
-                                                        lastLiveLon = longitude
-                                                    }
-                                                    override fun onLocationError(error: String) {
-                                                        connectionStatus = "Location error: $error"
-                                                    }
-                                                },
-                                                minTimeMs = 1000L,
-                                                minDistanceM = 0f
-                                            )
-                                            // Start a 5s loop to send LOC updates regardless of movement
-                                            liveLoopJob?.cancel()
-                                            liveLoopJob = coroutineScope.launch {
-                                                while (isActive && isLiveLocationSharing) {
-                                                    val lat = lastLiveLat
-                                                    val lon = lastLiveLon
-                                                    if (lat != null && lon != null) {
-                                                        sendLocationUpdateThrottled(lat, lon, service)
-                                                        lastLiveSentAtMs = System.currentTimeMillis()
-                                                    }
-                                                    delay(5000)
-                                                }
-                                            }
+                                            // Start foreground service responsible for continuous sending
+                                            LocationService.startLocationSharing(context)
                                         } else {
+                                            // Notify peer to stop receiving
+                                            try { service?.write("CTRL|LOC_STOP".toByteArray()) } catch (_: Exception) {}
+                                            LocationService.stopLocationSharing(context)
                                             locationManager.stopLocationUpdates()
                                             liveLoopJob?.cancel()
                                             liveLoopJob = null

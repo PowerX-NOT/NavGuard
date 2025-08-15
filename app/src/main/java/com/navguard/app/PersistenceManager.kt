@@ -19,6 +19,7 @@ class PersistenceManager(private val context: Context) {
 
     private val chatPrefs: SharedPreferences = context.getSharedPreferences(CHAT_PREFS_NAME, Context.MODE_PRIVATE)
     private val offlineMapPrefs: SharedPreferences = context.getSharedPreferences(OFFLINE_MAP_PREFS_NAME, Context.MODE_PRIVATE)
+    private val appPrefs: SharedPreferences = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
     private val gson = Gson()
 
     // ---- Chat persistence (compatible with previous ChatPersistenceManager) ----
@@ -134,6 +135,42 @@ class PersistenceManager(private val context: Context) {
             Log.e(TAG, "Error clearing offline map URI", e)
         }
     }
+
+    // ---- Live location flags (per device) ----
+    fun setLiveSharingEnabled(deviceAddress: String, enabled: Boolean) {
+        try {
+            appPrefs.edit().putBoolean(liveSharingKey(deviceAddress), enabled).apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving live sharing flag", e)
+        }
+    }
+
+    fun isLiveSharingEnabled(deviceAddress: String): Boolean {
+        return try {
+            appPrefs.getBoolean(liveSharingKey(deviceAddress), false)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun setLiveReceivingEnabled(deviceAddress: String, enabled: Boolean) {
+        try {
+            appPrefs.edit().putBoolean(liveReceivingKey(deviceAddress), enabled).apply()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving live receiving flag", e)
+        }
+    }
+
+    fun isLiveReceivingEnabled(deviceAddress: String): Boolean {
+        return try {
+            appPrefs.getBoolean(liveReceivingKey(deviceAddress), false)
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    private fun liveSharingKey(deviceAddress: String): String = "live_share_" + deviceAddress.replace(":", "_")
+    private fun liveReceivingKey(deviceAddress: String): String = "live_recv_" + deviceAddress.replace(":", "_")
 }
 
 data class MessageDisplay(

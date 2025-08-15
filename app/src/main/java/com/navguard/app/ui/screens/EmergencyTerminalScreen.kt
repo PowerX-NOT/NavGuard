@@ -305,6 +305,34 @@ fun EmergencyTerminalScreen(
         }
         // Load existing messages
         messages = chatManager.loadMessages(deviceAddress)
+        
+        // Get initial location and start updates for GPS status
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) 
+            == PackageManager.PERMISSION_GRANTED) {
+            locationManager.getCurrentLocation(object : LocationManager.LocationCallback {
+                override fun onLocationReceived(latitude: Double, longitude: Double) {
+                    locationText = "GPS: ${String.format("%.6f°N", latitude)}, ${String.format("%.6f°E", longitude)}"
+                }
+                override fun onLocationError(error: String) {
+                    locationText = "GPS: Error - $error"
+                }
+            })
+            
+            // Start continuous location updates for GPS status
+            locationManager.requestLocationUpdates(
+                object : LocationManager.LocationCallback {
+                    override fun onLocationReceived(latitude: Double, longitude: Double) {
+                        locationText = "GPS: ${String.format("%.6f°N", latitude)}, ${String.format("%.6f°E", longitude)}"
+                    }
+                    override fun onLocationError(error: String) {
+                        locationText = "GPS: Error - $error"
+                    }
+                },
+                minTimeMs = 5000L,
+                minDistanceM = 5f
+            )
+        }
+        
         try {
             // Start service in foreground mode before binding
             val intent = Intent(context, SerialService::class.java)
@@ -789,8 +817,11 @@ fun EmergencyTerminalScreen(
                                                 override fun onLocationReceived(latitude: Double, longitude: Double) {
                                                     lastLiveLat = latitude
                                                     lastLiveLon = longitude
+                                                    locationText = "GPS: ${String.format("%.6f°N", latitude)}, ${String.format("%.6f°E", longitude)}"
                                                 }
-                                                override fun onLocationError(error: String) {}
+                                                override fun onLocationError(error: String) {
+                                                    locationText = "GPS: Error - $error"
+                                                }
                                             })
                                             // Start foreground service responsible for continuous sending
                                             LocationService.startLocationSharing(context)

@@ -1326,20 +1326,11 @@ fun MessageItem(
             .padding(vertical = 1.dp),
         horizontalAlignment = if (isSent) Alignment.End else Alignment.Start
     ) {
-        // Message bubble with dynamic width based on text length
+        // Dynamic message bubble that automatically adjusts to content
         Card(
             modifier = Modifier
-                .widthIn(
-                    min = 60.dp,
-                    max = when {
-                        message.content.length > 150 -> 350.dp
-                        message.content.length > 100 -> 300.dp
-                        message.content.length > 50 -> 250.dp
-                        message.content.length > 20 -> 180.dp
-                        message.content.length > 10 -> 120.dp
-                        else -> 80.dp
-                    }
-                )
+                .wrapContentWidth()
+                .widthIn(max = 280.dp) // Only set maximum, let content determine minimum
                 .padding(horizontal = 6.dp)
                 .clickable(
                     enabled = !isSent && !message.isRead(),
@@ -1368,7 +1359,9 @@ fun MessageItem(
             elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
         ) {
             Column(
-                modifier = Modifier.padding(8.dp)
+                modifier = Modifier
+                    .padding(8.dp)
+                    .wrapContentWidth()
             ) {
                 // Message content with clickable links
                 ClickableTextWithLinks(
@@ -1378,7 +1371,7 @@ fun MessageItem(
                         isSent -> MaterialTheme.colorScheme.onPrimaryContainer
                         else -> MaterialTheme.colorScheme.onSurfaceVariant
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.wrapContentWidth()
                 )
                 
                 // Location info if available (compact)
@@ -1386,7 +1379,7 @@ fun MessageItem(
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.wrapContentWidth()
                     ) {
                         Icon(
                             imageVector = Icons.Default.Info,
@@ -1430,7 +1423,7 @@ fun MessageItem(
                     Spacer(modifier = Modifier.height(2.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.wrapContentWidth()
                     ) {
                         Icon(
                             imageVector = Icons.Default.Warning,
@@ -1449,50 +1442,39 @@ fun MessageItem(
                     }
                 }
                 
-                // Status and timestamp row
-                Spacer(modifier = Modifier.height(2.dp))
+                // Status and timestamp row - natural dynamic layout
+                Spacer(modifier = Modifier.height(4.dp))
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = if (isSent) Arrangement.End else Arrangement.Start,
-                    verticalAlignment = Alignment.Bottom
+                    modifier = Modifier.wrapContentWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Group status ticks and time together at the bottom-right
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .background(
-                                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.3f),
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                    ) {
-                        if (isSent) {
-                            Text(
-                                text = message.getStatusSymbol(),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = when (message.status) {
-                                    EmergencyMessage.MessageStatus.READ -> Color(0xFF2196F3)
-                                    EmergencyMessage.MessageStatus.DELIVERED -> MaterialTheme.colorScheme.onPrimaryContainer
-                                    EmergencyMessage.MessageStatus.SENT -> MaterialTheme.colorScheme.onPrimaryContainer
-                                    EmergencyMessage.MessageStatus.SENDING -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-                                },
-                                fontSize = 10.sp, // Reduced size for tick marks
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(end = 2.dp)
-                            )
-                        }
+                    if (isSent) {
                         Text(
-                            text = getTimeOnly(message.timestamp),
+                            text = message.getStatusSymbol(),
                             style = MaterialTheme.typography.bodySmall,
-                            color = when {
-                                message.isEmergency() -> Color(0xFFD32F2F).copy(alpha = 0.9f)
-                                isSent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f)
+                            color = when (message.status) {
+                                EmergencyMessage.MessageStatus.READ -> Color(0xFF2196F3)
+                                EmergencyMessage.MessageStatus.DELIVERED -> MaterialTheme.colorScheme.onPrimaryContainer
+                                EmergencyMessage.MessageStatus.SENT -> MaterialTheme.colorScheme.onPrimaryContainer
+                                EmergencyMessage.MessageStatus.SENDING -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
                             },
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Medium
                         )
+                        Spacer(modifier = Modifier.width(4.dp))
                     }
+                    Text(
+                        text = getTimeOnly(message.timestamp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = when {
+                            message.isEmergency() -> Color(0xFFD32F2F).copy(alpha = 0.8f)
+                            isSent -> MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+                        },
+                        fontSize = 9.sp,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
         }

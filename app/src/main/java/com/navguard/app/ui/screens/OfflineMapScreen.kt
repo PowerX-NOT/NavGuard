@@ -21,7 +21,7 @@ import org.mapsforge.map.android.util.AndroidUtil
 import org.mapsforge.map.android.view.MapView
 import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
-import org.mapsforge.map.rendertheme.InternalRenderTheme
+import org.mapsforge.map.rendertheme.internal.MapsforgeThemes
 import java.io.FileInputStream
 import androidx.compose.ui.res.stringResource
 import com.navguard.app.R
@@ -221,7 +221,7 @@ fun OfflineMapScreen(
                                     mv.model.mapViewPosition,
                                     AndroidGraphicFactory.INSTANCE
                                 )
-                                renderLayer.setXmlRenderTheme(InternalRenderTheme.DEFAULT)
+                                renderLayer.setXmlRenderTheme(MapsforgeThemes.DEFAULT)
                                 mv.layerManager.layers.add(renderLayer)
                                 val center = centerLatLong ?: LatLong(52.5200, 13.4050)
                                 mv.setCenter(center)

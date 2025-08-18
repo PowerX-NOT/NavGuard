@@ -164,7 +164,18 @@ fun OfflineMapScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(id = R.string.offline_map)) },
+                title = {
+                    Column {
+                        Text(stringResource(id = R.string.offline_map))
+                        if (isLiveLocationFromOther && initialCenter != null) {
+                            Text(
+                                text = "Sender: ${String.format("%.6f", initialCenter.latitude)}, ${String.format("%.6f", initialCenter.longitude)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")

@@ -541,11 +541,22 @@ fun EmergencyTerminalScreen(
                             tint = Color(0xFF4CAF50)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = if (isReceivingLiveLocation && !isLiveLocationSharing) "Live location receiving" else "Live location sharing",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+                        Column {
+                            Text(
+                                text = if (isReceivingLiveLocation && !isLiveLocationSharing) "Live location receiving" else "Live location sharing",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            // Display sender's coordinates when receiving live location
+                            if (isReceivingLiveLocation && lastLiveLat != null && lastLiveLon != null) {
+                                Text(
+                                    text = "Sender: ${String.format("%.6f", lastLiveLat)}, ${String.format("%.6f", lastLiveLon)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                        }
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (lastLiveLat != null && lastLiveLon != null) {

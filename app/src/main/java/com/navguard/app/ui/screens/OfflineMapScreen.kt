@@ -52,6 +52,8 @@ fun OfflineMapScreen(
     val persistence = remember { PersistenceManager(context) }
     var mapUri by remember { mutableStateOf<Uri?>(null) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
+    var mapKey by remember { mutableStateOf(0) } // Key to force view recreation
+    
     // On first launch, try to load the saved URI
     LaunchedEffect(Unit) {
         val uriString = persistence.getOfflineMapUri()
@@ -65,7 +67,11 @@ fun OfflineMapScreen(
         contract = ActivityResultContracts.OpenDocument(),
         onResult = { uri ->
             if (uri != null) {
+                // Clear existing map view to force reload
+                mapView?.destroy()
+                mapView = null
                 mapUri = uri
+                mapKey++ // Force view recreation
                 // Persist the URI
                 persistence.setOfflineMapUri(uri.toString())
                 // Persist URI permission
@@ -133,6 +139,24 @@ fun OfflineMapScreen(
             locationManager.stopLocationUpdates()
         }
     }
+    
+    // Cleanup map view when component is disposed
+    DisposableEffect(Unit) {
+        onDispose {
+            mapView?.destroy()
+            mapView = null
+        }
+    }
+    
+    // Handle map URI changes and force reload
+    LaunchedEffect(mapUri) {
+        if (mapUri != null) {
+            // Force map view recreation when URI changes
+            mapView?.destroy()
+            mapView = null
+            mapKey++
+        }
+    }
 
     var markerRef by remember { mutableStateOf<Marker?>(null) }
     var hasCenteredMap by remember { mutableStateOf(false) }
@@ -186,8 +210,9 @@ fun OfflineMapScreen(
                         loadError = false
                     }
                 } else {
-                    AndroidView(
-                        factory = { ctx ->
+                    key(mapKey) { // Force recreation when map changes
+                        AndroidView(
+                            factory = { ctx ->
                             try {
                                 AndroidGraphicFactory.createInstance(ctx.applicationContext)
                                 val mv = MapView(ctx)
@@ -291,6 +316,7 @@ fun OfflineMapScreen(
                             }
                         }
                     )
+                    }
                 }
             }
         }

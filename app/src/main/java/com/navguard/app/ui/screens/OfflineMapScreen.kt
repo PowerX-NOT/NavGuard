@@ -40,6 +40,8 @@ import androidx.core.content.res.ResourcesCompat
 import android.graphics.BitmapFactory
 import android.graphics.drawable.BitmapDrawable
 import androidx.compose.ui.unit.Density
+import com.navguard.app.SerialBus
+import kotlinx.coroutines.flow.collect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,6 +89,8 @@ fun OfflineMapScreen(
 
     val locationManager = remember { LocationManager(context) }
     var centerLatLong by remember { mutableStateOf<LatLong?>(initialCenter) }
+    // Track latest live location from the other party when viewing their location
+    var senderLatLong by remember { mutableStateOf<LatLong?>(if (isLiveLocationFromOther) initialCenter else null) }
     var isLocating by remember { mutableStateOf(centerLatLong == null) }
     // On first launch, try to get current location if not provided
     LaunchedEffect(Unit) {
@@ -159,7 +163,31 @@ fun OfflineMapScreen(
     }
 
     var markerRef by remember { mutableStateOf<Marker?>(null) }
+    var blueMarkerRef by remember { mutableStateOf<Marker?>(null) }
     var hasCenteredMap by remember { mutableStateOf(false) }
+
+    // When viewing a received live location, listen for SerialBus messages to update sender coordinates
+    LaunchedEffect(isLiveLocationFromOther) {
+        if (isLiveLocationFromOther) {
+            SerialBus.events.collect { raw ->
+                val text = raw.trim()
+                if (text.startsWith("ACK|")) return@collect
+                if (text.startsWith("CTRL|LOC_STOP")) {
+                    senderLatLong = null
+                    return@collect
+                }
+                val parts = text.split("|")
+                if (parts.size >= 6) {
+                    val content = parts[1]
+                    val lat = parts[2].toDoubleOrNull()
+                    val lon = parts[3].toDoubleOrNull()
+                    if (content == "LOC" && lat != null && lon != null && lat != 0.0 && lon != 0.0) {
+                        senderLatLong = LatLong(lat, lon)
+                    }
+                }
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -167,9 +195,9 @@ fun OfflineMapScreen(
                 title = {
                     Column {
                         Text(stringResource(id = R.string.offline_map))
-                        if (isLiveLocationFromOther && initialCenter != null) {
+                        if (isLiveLocationFromOther && senderLatLong != null) {
                             Text(
-                                text = "Sender: ${String.format("%.6f", initialCenter.latitude)}, ${String.format("%.6f", initialCenter.longitude)}",
+                                text = "Sender: ${String.format("%.6f", senderLatLong!!.latitude)}, ${String.format("%.6f", senderLatLong!!.longitude)}",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -293,12 +321,13 @@ fun OfflineMapScreen(
                                     markerRef = marker
 
                                     // If this is live location from someone else, also add their blue pin
-                                    if (isLiveLocationFromOther) {
+                                    if (isLiveLocationFromOther && senderLatLong != null) {
                                         val bluePinBitmapRaw = BitmapFactory.decodeResource(ctx.resources, com.navguard.app.R.drawable.pinblue)
                                         val bluePinBitmapScaled = android.graphics.Bitmap.createScaledBitmap(bluePinBitmapRaw, widthPx, heightPx, true)
                                         val bluePinBitmap = AndroidGraphicFactory.convertToBitmap(BitmapDrawable(ctx.resources, bluePinBitmapScaled))
-                                        val blueMarker = Marker(centerLatLong, bluePinBitmap, 0, -bluePinBitmap.height / 2)
+                                        val blueMarker = Marker(senderLatLong, bluePinBitmap, 0, -bluePinBitmap.height / 2)
                                         mv.layerManager.layers.add(blueMarker)
+                                        blueMarkerRef = blueMarker
                                     }
                                 }
                                 hasCenteredMap = true
@@ -322,6 +351,24 @@ fun OfflineMapScreen(
                                 if (currentMarker.latLong != centerLatLong) {
                                     currentMarker.latLong = centerLatLong
                                     // Force map redraw to show updated marker position in real-time
+                                    mv.layerManager.redrawLayers()
+                                }
+                            }
+                            // Update or add blue marker for sender's live location
+                            if (isLiveLocationFromOther && senderLatLong != null) {
+                                if (blueMarkerRef == null) {
+                                    val density = mv.context.resources.displayMetrics.density
+                                    val widthPx = (24 * density).toInt()
+                                    val heightPx = (42 * density).toInt()
+                                    val bluePinBitmapRaw = BitmapFactory.decodeResource(mv.context.resources, com.navguard.app.R.drawable.pinblue)
+                                    val bluePinBitmapScaled = android.graphics.Bitmap.createScaledBitmap(bluePinBitmapRaw, widthPx, heightPx, true)
+                                    val bluePinBitmap = AndroidGraphicFactory.convertToBitmap(BitmapDrawable(mv.context.resources, bluePinBitmapScaled))
+                                    val blueMarker = Marker(senderLatLong, bluePinBitmap, 0, -bluePinBitmap.height / 2)
+                                    mv.layerManager.layers.add(blueMarker)
+                                    blueMarkerRef = blueMarker
+                                    mv.layerManager.redrawLayers()
+                                } else if (blueMarkerRef!!.latLong != senderLatLong) {
+                                    blueMarkerRef!!.latLong = senderLatLong
                                     mv.layerManager.redrawLayers()
                                 }
                             }

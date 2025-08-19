@@ -253,6 +253,10 @@ class SerialService : Service(), SerialListener {
      */
     override fun onSerialRead(data: ByteArray) {
         if (connected) {
+            // Broadcast raw incoming chunk to SerialBus for global observers (e.g., Offline Map live updates)
+            try {
+                SerialBus.tryEmit(String(data))
+            } catch (_: Exception) { }
             synchronized(this) {
                 listener?.let { listener ->
                     val first: Boolean

@@ -16,11 +16,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
-import androidx.compose.material3.TextField
+import androidx.compose.material3.SnackbarHost
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,12 +34,15 @@ import kotlinx.coroutines.launch
 import org.jsoup.Jsoup
 import java.io.File
 import java.net.URL
+import com.navguard.app.ui.theme.NavGuardTheme
 
 class MapDownloadActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MapDownloadScreen(onBack = { finish() })
+            NavGuardTheme {
+                MapDownloadScreen(onBack = { finish() })
+            }
         }
     }
 }
@@ -106,17 +114,24 @@ fun MapDownloadScreen(onBack: () -> Unit) {
         }
     }
 
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scrollBehavior = TopAppBarDefaults.enterAlwaysScrollBehavior()
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            LargeTopAppBar(
                 title = { Text("Download Maps") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.largeTopAppBarColors(),
+                scrollBehavior = scrollBehavior
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        contentWindowInsets = WindowInsets.safeDrawing
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             // Confirm delete dialog
@@ -133,6 +148,7 @@ fun MapDownloadScreen(onBack: () -> Unit) {
                             } catch (_: Exception) {}
                             pendingDelete = null
                             pendingDeleteName = null
+                            scope.launch { snackbarHostState.showSnackbar("Deleted ${pendingDeleteName ?: "map"}") }
                         }) { Text("Delete") }
                     },
                     dismissButton = {
@@ -140,16 +156,27 @@ fun MapDownloadScreen(onBack: () -> Unit) {
                     }
                 )
             }
-            // Search box
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
+            // Search bar
+            var searchExpanded by remember { mutableStateOf(false) }
+            SearchBar(
+                query = query,
+                onQueryChange = { query = it },
+                onSearch = { searchExpanded = false },
+                active = searchExpanded,
+                onActiveChange = { searchExpanded = it },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, contentDescription = "Clear") }
+                    }
+                },
+                placeholder = { Text("Search maps and folders") },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                singleLine = true,
-                label = { Text("Search maps and folders") }
-            )
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                // No search suggestions for now
+            }
             if (suggestedKey != null) {
                 AssistChipRow(suggestedKey!!, onOpen = { key ->
                     // Try to open the continent folder if present
@@ -187,52 +214,46 @@ fun MapDownloadScreen(onBack: () -> Unit) {
                         }
                     }
                     items(filtered) { entry ->
-                        Row(
+                        val (targetDir, targetFile) = remember(currentUrl, entry, version) {
+                            val rel = currentUrl.removePrefix(ROOT_URL).trim('/')
+                            val tDir = if (rel.isBlank()) "offline-maps" else "offline-maps/$rel"
+                            val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), tDir)
+                            val file = File(dir, entry.name)
+                            tDir to file
+                        }
+                        val exists = !entry.isDirectory && entry.name.endsWith(".map", true) && targetFile.exists()
+                        ListItem(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable {
-                                    if (entry.isDirectory) {
-                                        currentUrl = entry.url
-                                    }
-                                }
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(entry.name)
-                                Text(
-                                    if (entry.isDirectory) "Directory" else "Map file",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            if (!entry.isDirectory && entry.name.endsWith(".map", true)) {
-                                val (targetDir, targetFile) = remember(currentUrl, entry, version) {
-                                    val rel = currentUrl.removePrefix(ROOT_URL).trim('/')
-                                    val tDir = if (rel.isBlank()) "offline-maps" else "offline-maps/$rel"
-                                    val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), tDir)
-                                    val file = File(dir, entry.name)
-                                    tDir to file
-                                }
-                                val exists = targetFile.exists()
-                                if (exists) {
-                                    IconButton(onClick = {
-                                        // Ask for confirmation before deleting
-                                        pendingDelete = targetFile
-                                        pendingDeleteName = entry.name
-                                    }) {
-                                        Icon(Icons.Default.Delete, contentDescription = "Delete")
-                                    }
-                                } else {
-                                    IconButton(onClick = {
-                                        enqueueDownload(ctx, entry, currentUrl)
-                                        version++
-                                    }) {
-                                        Icon(Icons.Default.Download, contentDescription = "Download")
+                                .clickable(enabled = entry.isDirectory) {
+                                    if (entry.isDirectory) currentUrl = entry.url
+                                },
+                            leadingContent = {
+                                if (entry.isDirectory) Icon(Icons.Default.Folder, contentDescription = null)
+                                else Icon(Icons.Default.Map, contentDescription = null)
+                            },
+                            headlineContent = { Text(entry.name) },
+                            supportingContent = {
+                                if (entry.isDirectory) Text("Directory") else Text(if (exists) "Map file • Downloaded" else "Map file")
+                            },
+                            trailingContent = {
+                                if (!entry.isDirectory && entry.name.endsWith(".map", true)) {
+                                    if (exists) {
+                                        IconButton(onClick = {
+                                            pendingDelete = targetFile
+                                            pendingDeleteName = entry.name
+                                        }) { Icon(Icons.Default.Delete, contentDescription = "Delete") }
+                                    } else {
+                                        IconButton(onClick = {
+                                            enqueueDownload(ctx, entry, currentUrl)
+                                            version++
+                                            // Snackbar
+                                            scope.launch { snackbarHostState.showSnackbar("Downloading ${entry.name} → $targetDir") }
+                                        }) { Icon(Icons.Default.Download, contentDescription = "Download") }
                                     }
                                 }
                             }
-                        }
+                        )
                         Divider()
                     }
                 }

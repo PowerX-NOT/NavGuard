@@ -20,6 +20,8 @@
     
     <!-- Vibration for emergency alerts -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Internet for map list fetching and downloads -->
+    <uses-permission android:name="android.permission.INTERNET" />
     
     <!-- Storage permissions for chat persistence -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
@@ -47,6 +49,11 @@
             android:name=".LocationService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <activity
+            android:name=".MapDownloadActivity"
+            android:exported="false"
+            android:label="Download Maps" />
     </application>
 
 </manifest>

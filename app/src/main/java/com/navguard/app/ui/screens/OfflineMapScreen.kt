@@ -30,7 +30,7 @@ import com.navguard.app.R
 import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Download
 import com.navguard.app.PersistenceManager
 import com.navguard.app.LocationManager
 import android.Manifest
@@ -239,7 +239,14 @@ fun OfflineMapScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                actions = { }
+                actions = {
+                    IconButton(onClick = {
+                        val intent = Intent(context, com.navguard.app.MapDownloadActivity::class.java)
+                        context.startActivity(intent)
+                    }) {
+                        Icon(Icons.Filled.Download, contentDescription = "Download Maps")
+                    }
+                }
             )
         }
     ) { paddingValues ->

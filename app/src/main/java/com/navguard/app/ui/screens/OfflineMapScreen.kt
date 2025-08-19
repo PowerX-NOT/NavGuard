@@ -23,6 +23,8 @@ import org.mapsforge.map.layer.renderer.TileRendererLayer
 import org.mapsforge.map.reader.MapFile
 import org.mapsforge.map.rendertheme.internal.MapsforgeThemes
 import java.io.FileInputStream
+import java.io.File
+import java.io.FileOutputStream
 import androidx.compose.ui.res.stringResource
 import com.navguard.app.R
 import androidx.compose.ui.Alignment
@@ -171,15 +173,7 @@ fun OfflineMapScreen(
         }
     }
     
-    // Handle map URI changes and force reload
-    LaunchedEffect(mapUri) {
-        if (mapUri != null) {
-            // Force map view recreation when URI changes
-            mapView?.destroy()
-            mapView = null
-            mapKey++
-        }
-    }
+    // No URI handling; we always load bundled world.map from assets
 
     var markerRef by remember { mutableStateOf<Marker?>(null) }
     var blueMarkerRef by remember { mutableStateOf<Marker?>(null) }
@@ -245,11 +239,7 @@ fun OfflineMapScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
-                actions = {
-                    IconButton(onClick = { openMapLauncher.launch(arrayOf("*/*")) }) {
-                        Icon(Icons.Filled.Info, contentDescription = stringResource(id = R.string.open_map))
-                    }
-                }
+                actions = { }
             )
         }
     ) { paddingValues ->
@@ -258,16 +248,7 @@ fun OfflineMapScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            if (mapUri == null) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Button(onClick = { openMapLauncher.launch(arrayOf("*/*")) }) {
-                        Text(stringResource(id = R.string.open_map))
-                    }
-                }
-            } else if (isLocating) {
+            if (isLocating) {
                 // Show loading indicator while fetching location
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -278,11 +259,12 @@ fun OfflineMapScreen(
             } else {
                 var loadError by remember { mutableStateOf(false) }
                 if (loadError) {
-                    // If error, clear URI and prompt user
-                    LaunchedEffect(Unit) {
-                        persistence.clearOfflineMapUri()
-                        mapUri = null
-                        loadError = false
+                    // If error, show simple fallback
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("Failed to load world.map")
                     }
                 } else {
                     key(mapKey) { // Force recreation when map changes
@@ -313,8 +295,23 @@ fun OfflineMapScreen(
                                     1f,
                                     mv.model.frameBufferModel.overdrawFactor
                                 )
-                                val stream = ctx.contentResolver.openInputStream(mapUri!!) as FileInputStream
-                                val mapStore = MapFile(stream)
+                                // Load pre-bundled world.map from assets by copying to cache (MapFile needs File or FileInputStream)
+                                val cacheFile = File(ctx.cacheDir, "world.map")
+                                if (!cacheFile.exists()) {
+                                    ctx.assets.open("world.map").use { ins ->
+                                        FileOutputStream(cacheFile).use { outs ->
+                                            val buf = ByteArray(8 * 1024)
+                                            var n: Int
+                                            while (true) {
+                                                n = ins.read(buf)
+                                                if (n <= 0) break
+                                                outs.write(buf, 0, n)
+                                            }
+                                            outs.flush()
+                                        }
+                                    }
+                                }
+                                val mapStore = MapFile(FileInputStream(cacheFile))
                                 val renderLayer = TileRendererLayer(
                                     cache,
                                     mapStore,
@@ -325,7 +322,7 @@ fun OfflineMapScreen(
                                 mv.layerManager.layers.add(renderLayer)
                                 val center = centerLatLong ?: LatLong(52.5200, 13.4050)
                                 mv.setCenter(center)
-                                mv.setZoomLevel(16) // Show ~200m/500ft area by default
+                                mv.setZoomLevel(5) // Approx ~500 km / 200 mi view on typical phone screens
                                 
                                 // Configure zoom controls for better gesture handling
                                 mv.setBuiltInZoomControls(true)

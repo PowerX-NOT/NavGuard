@@ -42,6 +42,25 @@ import android.graphics.drawable.BitmapDrawable
 import androidx.compose.ui.unit.Density
 import com.navguard.app.SerialBus
 import kotlinx.coroutines.flow.collect
+import kotlin.math.*
+
+// Compute Haversine distance in meters between two LatLong points
+private fun distanceMeters(a: LatLong, b: LatLong): Double {
+    val R = 6371000.0 // Earth radius in meters
+    val dLat = Math.toRadians(b.latitude - a.latitude)
+    val dLon = Math.toRadians(b.longitude - a.longitude)
+    val lat1 = Math.toRadians(a.latitude)
+    val lat2 = Math.toRadians(b.latitude)
+    val sinDLat = sin(dLat / 2)
+    val sinDLon = sin(dLon / 2)
+    val h = sinDLat * sinDLat + sinDLon * sinDLon * cos(lat1) * cos(lat2)
+    val c = 2 * atan2(sqrt(h), sqrt(1 - h))
+    return R * c
+}
+
+private fun formatDistance(meters: Double): String {
+    return if (meters < 1000) "${meters.roundToInt()} m" else String.format("%.2f km", meters / 1000.0)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -196,11 +215,28 @@ fun OfflineMapScreen(
                     Column {
                         Text(stringResource(id = R.string.offline_map))
                         if (isLiveLocationFromOther && senderLatLong != null) {
-                            Text(
-                                text = "Sender: ${String.format("%.6f", senderLatLong!!.latitude)}, ${String.format("%.6f", senderLatLong!!.longitude)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Row {
+                                Text(
+                                    text = "Sender: ${String.format("%.6f", senderLatLong!!.latitude)}, ${String.format("%.6f", senderLatLong!!.longitude)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                if (centerLatLong != null) {
+                                    val dist = distanceMeters(centerLatLong!!, senderLatLong!!)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "•",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Distance: ${formatDistance(dist)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
                         }
                     }
                 },

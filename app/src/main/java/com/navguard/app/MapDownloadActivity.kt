@@ -217,7 +217,7 @@ fun MapDownloadScreen(onBack: () -> Unit) {
                         val (targetDir, targetFile) = remember(currentUrl, entry, version) {
                             val rel = currentUrl.removePrefix(ROOT_URL).trim('/')
                             val tDir = if (rel.isBlank()) "offline-maps" else "offline-maps/$rel"
-                            val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), tDir)
+                            val dir = File(ctx.getExternalFilesDir(null), tDir)
                             val file = File(dir, entry.name)
                             tDir to file
                         }
@@ -276,13 +276,13 @@ private fun enqueueDownload(context: Context, entry: Entry, currentUrl: String) 
     // Compute relative path from ROOT_URL to preserve folder structure
     val rel = currentUrl.removePrefix(ROOT_URL).trim('/')
     val targetDir = if (rel.isBlank()) "offline-maps" else "offline-maps/$rel"
-    val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), targetDir)
+    val dir = File(context.getExternalFilesDir(null), targetDir)
     if (!dir.exists()) dir.mkdirs()
     val request = DownloadManager.Request(uri)
         .setTitle("Downloading ${fileName}")
         .setDescription("Mapsforge map")
         .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-        .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "$targetDir/${fileName}")
+        .setDestinationInExternalFilesDir(context, /* dirType */ null, "$targetDir/${fileName}")
         .setAllowedOverMetered(true)
         .setAllowedOverRoaming(true)
     dm.enqueue(request)

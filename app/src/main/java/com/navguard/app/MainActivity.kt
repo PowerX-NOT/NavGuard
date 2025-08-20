@@ -88,7 +88,8 @@ fun NavGuardApp() {
                 onDeviceSelected = { deviceAddress ->
                     autoOpened = false
                     navController.navigate("emergency_terminal/$deviceAddress")
-                }
+                },
+                onOpenMap = { navController.navigate("offline_map") }
             )
         }
         composable("emergency_terminal/{deviceAddress}") { backStackEntry ->

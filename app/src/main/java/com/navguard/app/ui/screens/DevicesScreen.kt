@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -45,7 +46,8 @@ import com.navguard.app.R
 @Composable
 fun DevicesScreen(
     scanKey: Int = 0,
-    onDeviceSelected: (String) -> Unit
+    onDeviceSelected: (String) -> Unit,
+    onOpenMap: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -266,6 +268,11 @@ fun DevicesScreen(
                             if (isScanning) Icons.Default.Refresh else Icons.Default.Search, 
                             contentDescription = if (isScanning) "Scanning..." else "Scan for devices"
                         )
+                    }
+                    IconButton(
+                        onClick = { onOpenMap() }
+                    ) {
+                        Icon(Icons.Filled.Map, contentDescription = "Open Offline Map")
                     }
                     IconButton(
                         onClick = {

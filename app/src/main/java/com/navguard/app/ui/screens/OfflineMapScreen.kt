@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.style.TextOverflow
 import org.mapsforge.core.model.LatLong
 import org.mapsforge.map.android.graphics.AndroidGraphicFactory
 import org.mapsforge.map.android.util.AndroidUtil
@@ -66,6 +67,12 @@ private fun distanceMeters(a: LatLong, b: LatLong): Double {
 private fun formatDistance(meters: Double): String {
     return if (meters < 1000) "${meters.roundToInt()} m" else String.format("%.2f km", meters / 1000.0)
 }
+
+private fun formatDistanceShort(meters: Double): String {
+    return if (meters < 1000) "${meters.roundToInt()}m" else String.format("%.1fkm", meters / 1000.0)
+}
+
+private fun formatCoordShort(value: Double): String = String.format("%.3f", value)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -213,28 +220,23 @@ fun OfflineMapScreen(
                     Column {
                         Text(stringResource(id = R.string.offline_map))
                         if (isLiveLocationFromOther && senderLatLong != null) {
-                            Row {
-                                Text(
-                                    text = "Sender: ${String.format("%.6f", senderLatLong!!.latitude)}, ${String.format("%.6f", senderLatLong!!.longitude)}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                            val info = buildString {
+                                append("S:")
+                                append(formatCoordShort(senderLatLong!!.latitude))
+                                append(',')
+                                append(formatCoordShort(senderLatLong!!.longitude))
                                 if (centerLatLong != null) {
-                                    val dist = distanceMeters(centerLatLong!!, senderLatLong!!)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "•",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "Distance: ${formatDistance(dist)}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    append(" • D:")
+                                    append(formatDistanceShort(distanceMeters(centerLatLong!!, senderLatLong!!)))
                                 }
                             }
+                            Text(
+                                text = info,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
                         }
                     }
                 },

@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.MyLocation
 import com.navguard.app.PersistenceManager
 import com.navguard.app.LocationManager
 import android.Manifest
@@ -240,6 +241,30 @@ fun OfflineMapScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+                            isLocating = true
+                            locationManager.getCurrentLocation(object : LocationManager.LocationCallback {
+                                override fun onLocationReceived(latitude: Double, longitude: Double) {
+                                    val ll = LatLong(latitude, longitude)
+                                    centerLatLong = ll
+                                    // Recenter and zoom if needed
+                                    mapView?.let { mv ->
+                                        mv.setCenter(ll)
+                                    }
+                                    isLocating = false
+                                }
+                                override fun onLocationError(error: String) {
+                                    isLocating = false
+                                    Toast.makeText(context, "Unable to get location", Toast.LENGTH_SHORT).show()
+                                }
+                            })
+                        } else {
+                            Toast.makeText(context, "Location permission not granted", Toast.LENGTH_SHORT).show()
+                        }
+                    }) {
+                        Icon(Icons.Filled.MyLocation, contentDescription = "Center on my location")
+                    }
                     IconButton(onClick = {
                         val intent = Intent(context, com.navguard.app.MapDownloadActivity::class.java)
                         context.startActivity(intent)

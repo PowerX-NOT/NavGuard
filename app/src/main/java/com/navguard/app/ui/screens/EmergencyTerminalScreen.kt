@@ -438,6 +438,23 @@ fun EmergencyTerminalScreen(
                         } else {
                             "No device connected"
                         }
+                        // Stop live location states on disconnect (both sending and receiving)
+                        if (isReceivingLiveLocation || isLiveLocationSharing) {
+                            isReceivingLiveLocation = false
+                            chatManager.setLiveReceivingEnabled(deviceAddress, false)
+                            if (isLiveLocationSharing) {
+                                isLiveLocationSharing = false
+                                chatManager.setLiveSharingEnabled(deviceAddress, false)
+                                try { service?.write("CTRL|LOC_STOP".toByteArray()) } catch (_: Exception) {}
+                                LocationService.stopLocationSharing(context)
+                            }
+                            lastLiveLat = null
+                            lastLiveLon = null
+                            liveLoopJob?.cancel()
+                            liveLoopJob = null
+                            locationManager.stopLocationUpdates()
+                            Toast.makeText(context, "Disconnected: live location stopped", Toast.LENGTH_SHORT).show()
+                        }
                         Toast.makeText(context, "Device disconnected", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -860,6 +877,11 @@ fun EmergencyTerminalScreen(
                                 // Live location toggle at the left edge of the text bar (no chat spam)
                                 IconButton(
                                     onClick = {
+                                        // Block enabling when not connected
+                                        if (!isConnected) {
+                                            Toast.makeText(context, "Not connected. Connect a device to share live location.", Toast.LENGTH_SHORT).show()
+                                            return@IconButton
+                                        }
                                         isLiveLocationSharing = !isLiveLocationSharing
                                         chatManager.setLiveSharingEnabled(deviceAddress, isLiveLocationSharing)
                                         if (isLiveLocationSharing) {
@@ -891,6 +913,7 @@ fun EmergencyTerminalScreen(
                                     Icon(Icons.Default.LocationOn, contentDescription = "Share Live Location", tint = tint)
                                 }
                             },
+// ...
                             trailingIcon = {
                                 // Regular send button on the right
                                 IconButton(

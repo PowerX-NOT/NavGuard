@@ -1,22 +1,47 @@
 #include "BluetoothSerial.h"
 #include <HardwareSerial.h>
+#include <TinyGPS++.h>
 
 BluetoothSerial BT;
 HardwareSerial LoRaSerial(2);  // UART2 for RYLR998
+// GPS (NavIC) on UART1
+HardwareSerial GPSSerial(1);   // UART1 for NavIC GPS
+TinyGPSPlus gps;
 
 #define LORA_RXD    16   // RYLR998 TX → ESP32 RX
 #define LORA_TXD    17   // RYLR998 RX ← ESP32 TX
 #define BUZZER_PIN  26   // Buzzer signal pin
 #define BLUE_LED    2    // Built-in blue LED on ESP32
+// NavIC GPS UART1 pins (match navic-gps.ino wiring)
+#define GPS_RX_PIN  21   // GPS TX → ESP32 RX (Blue wire)
+#define GPS_TX_PIN  22   // GPS RX ← ESP32 TX (Green wire)
+// Button input (active low, uses internal pull-up) — wired to GPIO27 -> GND
+#define BUTTON_PIN  27
+
+// Live location state
+bool liveEnabled = false;
+unsigned long lastLiveSendMs = 0;
+const unsigned long liveIntervalMs = 2000;
+
+// Button handling state
+bool btnPrev = HIGH;             // because of INPUT_PULLUP
+unsigned long pressStartMs = 0;
+bool longPressFired = false;
+unsigned long lastReleaseMs = 0;
+uint8_t tapCount = 0;
+const unsigned long longPressMs = 3000;
+const unsigned long doubleTapWindowMs = 400;  // double press gap
 
 // ⚙️ Device Config — change per device
-String myAddress = "1";         // A = "1", B = "2"
-String targetAddress = "2";     // A sends to B, vice versa
+String myAddress = "2";         // A = "1", B = "2"
+String targetAddress = "1";     // A sends to B, vice versa
 
 void setup() {
   Serial.begin(115200);
   BT.begin("LoRa_Node_" + myAddress);
   LoRaSerial.begin(115200, SERIAL_8N1, LORA_RXD, LORA_TXD);
+  // GPS UART1
+  GPSSerial.begin(115200, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
   // Initialize buzzer and LED
   pinMode(BUZZER_PIN, OUTPUT);
@@ -24,6 +49,9 @@ void setup() {
 
   pinMode(BLUE_LED, OUTPUT);
   digitalWrite(BLUE_LED, LOW);
+
+  // Button input
+  pinMode(BUTTON_PIN, INPUT_PULLUP);
 
   delay(500);
   Serial.println("🛠️ Configuring RYLR998...");
@@ -37,6 +65,73 @@ void setup() {
 }
 
 void loop() {
+  // ---- Feed GPS parser ----
+  while (GPSSerial.available() > 0) {
+    gps.encode(GPSSerial.read());
+  }
+
+  // ---- Button handling (active low) ----
+  bool btnNow = digitalRead(BUTTON_PIN);
+  unsigned long nowMs = millis();
+  // Rising/falling edge detection
+  if (btnPrev == HIGH && btnNow == LOW) {
+    // Press started
+    pressStartMs = nowMs;
+    longPressFired = false;
+  } else if (btnPrev == LOW && btnNow == HIGH) {
+    // Released
+    unsigned long pressDur = nowMs - pressStartMs;
+    if (pressDur < longPressMs) {
+      // Consider a tap
+      tapCount++;
+      if (tapCount == 1) {
+        lastReleaseMs = nowMs;
+      } else if (tapCount == 2) {
+        // Double press → stop live
+        liveEnabled = false;
+        tapCount = 0;
+        ringBuzzer(); // feedback
+      }
+    }
+  } else {
+    // While held, check long-press
+    if (btnNow == LOW && !longPressFired && (nowMs - pressStartMs >= longPressMs)) {
+      // Long press → start live sending
+      liveEnabled = true;
+      longPressFired = true;
+      tapCount = 0;
+      // Print NavIC banner when starting live
+      Serial.println("\n\n\n**********************************************************************************");
+      Serial.println("  Bharat Pi NavIC Shield Test Program");
+      Serial.println("  Connected via UART2: GPIO21 (RX), GPIO22 (TX)");
+      Serial.println("  Please wait while the NavIC module latches to satellites.");
+      Serial.println("  Red LED (PPS) will blink once it latches.");
+      Serial.println("  Ensure clear sky visibility.");
+      Serial.println("**********************************************************************************\n");
+      Serial.println("  Awaiting for NavIC satellite signal latching...\n\n");
+      blinkLED(); // feedback
+    }
+    // Handle tap timeout window
+    if (tapCount == 1 && (nowMs - lastReleaseMs > doubleTapWindowMs)) {
+      // Single tap timeout passed; ignore single tap action (no-op)
+      tapCount = 0;
+    }
+  }
+  btnPrev = btnNow;
+
+  // ---- Live GPS sending ----
+  if (liveEnabled && gps.location.isValid()) {
+    if (nowMs - lastLiveSendMs >= liveIntervalMs) {
+      lastLiveSendMs = nowMs;
+      float lat = gps.location.lat();
+      float lon = gps.location.lng();
+      String payload = String("LOC|") + String(lat, 7) + "|" + String(lon, 7);
+      String cmd = String("AT+SEND=") + targetAddress + "," + String(payload.length()) + "," + payload + "\r\n";
+      LoRaSerial.print(cmd);
+      Serial.println("📡 Sent LIVE: " + payload);
+    }
+  }
+
   // 🔁 Bluetooth → LoRa
   if (BT.available()) {
     String msg = BT.readStringUntil('\n');

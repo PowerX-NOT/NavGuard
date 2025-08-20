@@ -45,6 +45,8 @@ import android.graphics.drawable.BitmapDrawable
 import androidx.compose.ui.unit.Density
 import com.navguard.app.SerialBus
 import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.*
 
 // Compute Haversine distance in meters between two LatLong points
@@ -110,6 +112,7 @@ fun OfflineMapScreen(
     )
 
     val locationManager = remember { LocationManager(context) }
+    val scope = rememberCoroutineScope()
     var centerLatLong by remember { mutableStateOf<LatLong?>(initialCenter) }
     // Track latest live location from the other party when viewing their location
     var senderLatLong by remember { mutableStateOf<LatLong?>(if (isLiveLocationFromOther) initialCenter else null) }
@@ -250,7 +253,29 @@ fun OfflineMapScreen(
                                     centerLatLong = ll
                                     // Recenter and zoom if needed
                                     mapView?.let { mv ->
-                                        mv.setCenter(ll)
+                                        // Smoothly animate center from current to target over 300ms
+                                        scope.launch {
+                                            try {
+                                                val steps = 30
+                                                val durationMs = 300L
+                                                val frame = durationMs / steps
+                                                // Try to read current center; if not available, fall back to direct set
+                                                val start = try { mv.model.mapViewPosition.center } catch (_: Exception) { null }
+                                                if (start == null) {
+                                                    mv.setCenter(ll)
+                                                } else {
+                                                    for (i in 1..steps) {
+                                                        val t = i / steps.toFloat()
+                                                        val lat = start.latitude + (ll.latitude - start.latitude) * t
+                                                        val lon = start.longitude + (ll.longitude - start.longitude) * t
+                                                        mv.setCenter(LatLong(lat, lon))
+                                                        delay(frame)
+                                                    }
+                                                }
+                                            } catch (_: Exception) {
+                                                mv.setCenter(ll)
+                                            }
+                                        }
                                     }
                                     isLocating = false
                                 }

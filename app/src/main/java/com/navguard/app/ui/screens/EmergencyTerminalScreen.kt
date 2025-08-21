@@ -117,6 +117,8 @@ fun EmergencyTerminalScreen(
     var lastLiveLat by remember { mutableStateOf<Double?>(null) }
     var lastLiveLon by remember { mutableStateOf<Double?>(null) }
     var lastLiveSentAtMs by remember { mutableStateOf(0L) }
+    // Track if live receiving source is ESP32/NavIC (raw LOC|lat|lon)
+    var isNavICSource by remember { mutableStateOf(false) }
     
     // Bluetooth connection state
     var service: SerialService? by remember { mutableStateOf(null) }
@@ -196,6 +198,22 @@ fun EmergencyTerminalScreen(
                     // Remote signaled to stop live location
                     isReceivingLiveLocation = false
                     chatManager.setLiveReceivingEnabled(deviceAddress, false)
+                    isNavICSource = false
+                } else if (receivedText.startsWith("LOC|")) {
+                    // Raw NavIC live location: LOC|lat|lon
+                    val parts = receivedText.trim().split("|")
+                    if (parts.size >= 3) {
+                        val lat = parts[1].toDoubleOrNull()
+                        val lon = parts[2].toDoubleOrNull()
+                        if (lat != null && lon != null) {
+                            isReceivingLiveLocation = true
+                            chatManager.setLiveReceivingEnabled(deviceAddress, true)
+                            lastLiveLat = lat
+                            lastLiveLon = lon
+                            isNavICSource = true
+                            return
+                        }
+                    }
                 } else {
                     // Parse received emergency message
                     parseReceivedMessage(receivedText)?.let { msg ->
@@ -205,6 +223,7 @@ fun EmergencyTerminalScreen(
                             chatManager.setLiveReceivingEnabled(deviceAddress, true)
                             lastLiveLat = msg.latitude
                             lastLiveLon = msg.longitude
+                            isNavICSource = false
                             // Ack delivery
                             sendAcknowledgment(msg.messageId, EmergencyMessage.MessageStatus.DELIVERED, service)
                         } else {
@@ -232,6 +251,22 @@ fun EmergencyTerminalScreen(
                 } else if (receivedText.startsWith("CTRL|LOC_STOP")) {
                     isReceivingLiveLocation = false
                     chatManager.setLiveReceivingEnabled(deviceAddress, false)
+                    isNavICSource = false
+                } else if (receivedText.startsWith("LOC|")) {
+                    // Raw NavIC live location batched
+                    val parts = receivedText.trim().split("|")
+                    if (parts.size >= 3) {
+                        val lat = parts[1].toDoubleOrNull()
+                        val lon = parts[2].toDoubleOrNull()
+                        if (lat != null && lon != null) {
+                            isReceivingLiveLocation = true
+                            chatManager.setLiveReceivingEnabled(deviceAddress, true)
+                            lastLiveLat = lat
+                            lastLiveLon = lon
+                            isNavICSource = true
+                            return
+                        }
+                    }
                 } else {
                     // Parse received emergency message
                     parseReceivedMessage(receivedText)?.let { msg ->
@@ -241,6 +276,7 @@ fun EmergencyTerminalScreen(
                             chatManager.setLiveReceivingEnabled(deviceAddress, true)
                             lastLiveLat = msg.latitude
                             lastLiveLon = msg.longitude
+                            isNavICSource = false
                             // Ack delivery
                             sendAcknowledgment(msg.messageId, EmergencyMessage.MessageStatus.DELIVERED, service)
                         } else {
@@ -453,6 +489,7 @@ fun EmergencyTerminalScreen(
                             liveLoopJob?.cancel()
                             liveLoopJob = null
                             locationManager.stopLocationUpdates()
+                            isNavICSource = false
                             Toast.makeText(context, "Disconnected: live location stopped", Toast.LENGTH_SHORT).show()
                         }
                         Toast.makeText(context, "Device disconnected", Toast.LENGTH_SHORT).show()
@@ -560,7 +597,9 @@ fun EmergencyTerminalScreen(
                         Spacer(modifier = Modifier.width(6.dp))
                         Column {
                             Text(
-                                text = if (isReceivingLiveLocation && !isLiveLocationSharing) "Live location receiving" else "Live location sharing",
+                                text = if (isReceivingLiveLocation && !isLiveLocationSharing) {
+                                    if (isNavICSource) "Live location receiving (NavIC)" else "Live location receiving"
+                                } else "Live location sharing",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
@@ -596,6 +635,7 @@ fun EmergencyTerminalScreen(
                             } catch (_: Exception) {}
                             // Stop foreground service sending
                             LocationService.stopLocationSharing(context)
+                            isNavICSource = false
                         }) {
                             Text("Stop", color = Color(0xFFD32F2F))
                         }

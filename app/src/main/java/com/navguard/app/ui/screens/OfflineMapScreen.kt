@@ -9,6 +9,9 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -32,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.MyLocation
 import com.navguard.app.PersistenceManager
 import com.navguard.app.LocationManager
@@ -86,6 +90,8 @@ fun OfflineMapScreen(
     var mapUri by remember { mutableStateOf<Uri?>(null) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var mapKey by remember { mutableStateOf(0) } // Key to force view recreation
+    var showMapPicker by remember { mutableStateOf(false) }
+    var downloadedMaps by remember { mutableStateOf<List<File>>(emptyList()) }
     
     // On first launch, try to load the saved URI
     LaunchedEffect(Unit) {
@@ -184,7 +190,18 @@ fun OfflineMapScreen(
         }
     }
     
-    // No URI handling; we always load bundled world.map from assets
+    // Helper to scan downloaded maps under external files dir
+    fun scanDownloadedMaps(ctx: Context): List<File> {
+        val root = File(ctx.getExternalFilesDir(null), "offline-maps")
+        if (!root.exists()) return emptyList()
+        fun walk(dir: File): List<File> {
+            val children = dir.listFiles()?.toList() ?: emptyList()
+            val maps = children.filter { it.isFile && it.name.endsWith(".map", ignoreCase = true) }
+            val sub = children.filter { it.isDirectory }.flatMap { walk(it) }
+            return maps + sub
+        }
+        return walk(root).sortedBy { it.name.lowercase() }
+    }
 
     var markerRef by remember { mutableStateOf<Marker?>(null) }
     var blueMarkerRef by remember { mutableStateOf<Marker?>(null) }
@@ -293,6 +310,13 @@ fun OfflineMapScreen(
                         Icon(Icons.Filled.MyLocation, contentDescription = "Center on my location")
                     }
                     IconButton(onClick = {
+                        // Load from downloaded maps list
+                        downloadedMaps = scanDownloadedMaps(context)
+                        showMapPicker = true
+                    }) {
+                        Icon(Icons.Filled.Folder, contentDescription = "Open Downloaded Map")
+                    }
+                    IconButton(onClick = {
                         val intent = Intent(context, com.navguard.app.MapDownloadActivity::class.java)
                         context.startActivity(intent)
                     }) {
@@ -354,23 +378,54 @@ fun OfflineMapScreen(
                                     1f,
                                     mv.model.frameBufferModel.overdrawFactor
                                 )
-                                // Load pre-bundled world.map from assets by copying to cache (MapFile needs File or FileInputStream)
-                                val cacheFile = File(ctx.cacheDir, "world.map")
-                                if (!cacheFile.exists()) {
-                                    ctx.assets.open("world.map").use { ins ->
-                                        FileOutputStream(cacheFile).use { outs ->
-                                            val buf = ByteArray(8 * 1024)
-                                            var n: Int
-                                            while (true) {
-                                                n = ins.read(buf)
-                                                if (n <= 0) break
-                                                outs.write(buf, 0, n)
+                                // Decide which map to load: user-selected map or bundled world.map
+                                val mapStore: MapFile = if (mapUri != null) {
+                                    when (mapUri!!.scheme) {
+                                        "file" -> MapFile(File(mapUri!!.path!!))
+                                        else -> {
+                                            val pfd = ctx.contentResolver.openFileDescriptor(mapUri!!, "r")
+                                            if (pfd != null) {
+                                                MapFile(FileInputStream(pfd.fileDescriptor))
+                                            } else {
+                                                // Fallback to bundled asset
+                                                val cacheFile = File(ctx.cacheDir, "world.map")
+                                                if (!cacheFile.exists()) {
+                                                    ctx.assets.open("world.map").use { ins ->
+                                                        FileOutputStream(cacheFile).use { outs ->
+                                                            val buf = ByteArray(8 * 1024)
+                                                            var n: Int
+                                                            while (true) {
+                                                                n = ins.read(buf)
+                                                                if (n <= 0) break
+                                                                outs.write(buf, 0, n)
+                                                            }
+                                                            outs.flush()
+                                                        }
+                                                    }
+                                                }
+                                                MapFile(FileInputStream(cacheFile))
                                             }
-                                            outs.flush()
                                         }
                                     }
+                                } else {
+                                    // Load pre-bundled world.map from assets by copying to cache (MapFile needs File or FileInputStream)
+                                    val cacheFile = File(ctx.cacheDir, "world.map")
+                                    if (!cacheFile.exists()) {
+                                        ctx.assets.open("world.map").use { ins ->
+                                            FileOutputStream(cacheFile).use { outs ->
+                                                val buf = ByteArray(8 * 1024)
+                                                var n: Int
+                                                while (true) {
+                                                    n = ins.read(buf)
+                                                    if (n <= 0) break
+                                                    outs.write(buf, 0, n)
+                                                }
+                                                outs.flush()
+                                            }
+                                        }
+                                    }
+                                    MapFile(FileInputStream(cacheFile))
                                 }
-                                val mapStore = MapFile(FileInputStream(cacheFile))
                                 val renderLayer = TileRendererLayer(
                                     cache,
                                     mapStore,
@@ -470,5 +525,44 @@ fun OfflineMapScreen(
                 }
             }
         }
+    }
+
+    // Map picker dialog
+    if (showMapPicker) {
+        AlertDialog(
+            onDismissRequest = { showMapPicker = false },
+            title = { Text("Select Downloaded Map") },
+            text = {
+                if (downloadedMaps.isEmpty()) {
+                    Text("No downloaded maps found. Use the Download button to get maps.")
+                } else {
+                    Column(Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
+                        LazyColumn(Modifier.fillMaxWidth()) {
+                            items(downloadedMaps) { file ->
+                                ListItem(
+                                    headlineContent = { Text(file.name) },
+                                    supportingContent = { Text(file.parentFile?.name ?: "") },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            // Apply selection
+                                            mapView?.destroy()
+                                            mapView = null
+                                            mapUri = Uri.fromFile(file)
+                                            mapKey++
+                                            persistence.setOfflineMapUri(mapUri.toString())
+                                            showMapPicker = false
+                                        }
+                                )
+                                Divider()
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showMapPicker = false }) { Text("Close") }
+            }
+        )
     }
 }

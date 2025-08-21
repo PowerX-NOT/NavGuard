@@ -436,7 +436,15 @@ fun OfflineMapScreen(
                                 mv.layerManager.layers.add(renderLayer)
                                 val center = centerLatLong ?: LatLong(52.5200, 13.4050)
                                 mv.setCenter(center)
-                                mv.setZoomLevel(5) // Approx ~500 km / 200 mi view on typical phone screens
+                                // Use different initial zoom based on map source
+                                // world.map (bundled or selected): overview (~level 5). Other maps: close (~200 m), level ~18.
+                                val isWorldMapSelected = when (mapUri?.scheme) {
+                                    null -> true
+                                    "file" -> try { java.io.File(mapUri!!.path!!).name.equals("world.map", ignoreCase = true) } catch (_: Exception) { false }
+                                    else -> mapUri!!.lastPathSegment?.contains("world.map", ignoreCase = true) == true
+                                }
+                                val initialZoom = if (isWorldMapSelected) 5 else 18
+                                mv.setZoomLevel(initialZoom.toByte())
                                 
                                 // Configure zoom controls for better gesture handling
                                 mv.setBuiltInZoomControls(true)

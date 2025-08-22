@@ -91,7 +91,7 @@ void loop() {
         // Double press → stop live
         liveEnabled = false;
         tapCount = 0;
-        ringBuzzer(); // feedback
+        doubleBeep(); // 2 beeps feedback
       }
     }
   } else {
@@ -110,7 +110,8 @@ void loop() {
       Serial.println("  Ensure clear sky visibility.");
       Serial.println("**********************************************************************************\n");
       Serial.println("  Awaiting for NavIC satellite signal latching...\n\n");
-      blinkLED(); // feedback
+      longBeep(); // long feedback beep
+      blinkLED(); // LED feedback
     }
     // Handle tap timeout window
     if (tapCount == 1 && (nowMs - lastReleaseMs > doubleTapWindowMs)) {
@@ -130,6 +131,7 @@ void loop() {
       String cmd = String("AT+SEND=") + targetAddress + "," + String(payload.length()) + "," + payload + "\r\n";
       LoRaSerial.print(cmd);
       Serial.println("📡 Sent LIVE: " + payload);
+      miniBeep(); // small tick on each send
     }
   }
 
@@ -302,4 +304,28 @@ void blinkLED() {
     digitalWrite(BLUE_LED, LOW);
     delay(150);
   }
+}
+
+// 🔊 Long press feedback: single long beep (~600ms)
+void longBeep() {
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(600);
+  digitalWrite(BUZZER_PIN, LOW);
+}
+
+// 🔊 Double press feedback: two short beeps
+void doubleBeep() {
+  for (int i = 0; i < 2; i++) {
+    digitalWrite(BUZZER_PIN, HIGH);
+    delay(150);
+    digitalWrite(BUZZER_PIN, LOW);
+    delay(150);
+  }
+}
+
+// 🔊 Mini tick while live is sending
+void miniBeep() {
+  digitalWrite(BUZZER_PIN, HIGH);
+  delay(30);
+  digitalWrite(BUZZER_PIN, LOW);
 }

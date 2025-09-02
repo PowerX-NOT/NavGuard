@@ -49,6 +49,8 @@ import android.graphics.BitmapFactory
 import android.graphics.drawable.BitmapDrawable
 import androidx.compose.ui.unit.Density
 import com.navguard.app.SerialBus
+import com.navguard.app.ui.components.StatusBar
+import com.navguard.app.ui.components.StatusBarUtils
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -237,16 +239,14 @@ fun OfflineMapScreen(
                     Column {
                         Text(stringResource(id = R.string.offline_map))
                         if (isLiveLocationFromOther && senderLatLong != null) {
-                            val info = buildString {
-                                append("S:")
-                                append(formatCoordShort(senderLatLong!!.latitude))
-                                append(',')
-                                append(formatCoordShort(senderLatLong!!.longitude))
-                                if (centerLatLong != null) {
-                                    append(" • D:")
-                                    append(formatDistanceShort(distanceMeters(centerLatLong!!, senderLatLong!!)))
-                                }
-                            }
+                            val distanceM = if (centerLatLong != null) distanceMeters(centerLatLong!!, senderLatLong!!) else null
+                            val info = StatusBarUtils.buildLocationInfo(
+                                senderLatLong!!.latitude,
+                                senderLatLong!!.longitude,
+                                centerLatLong?.latitude,
+                                centerLatLong?.longitude,
+                                distanceM
+                            )
                             Text(
                                 text = info,
                                 style = MaterialTheme.typography.labelSmall,

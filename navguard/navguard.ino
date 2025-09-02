@@ -34,8 +34,8 @@ const unsigned long longPressMs = 3000;
 const unsigned long doubleTapWindowMs = 400;  // double press gap
 
 // ⚙️ Device Config — change per device
-String myAddress = "1";         // A = "1", B = "2"
-String targetAddress = "2";     // A sends to B, vice versa
+String myAddress = "2";         // A = "1", B = "2"
+String targetAddress = "1";     // A sends to B, vice versa
 
 void setup() {
   Serial.begin(115200);

@@ -75,6 +75,7 @@ import com.navguard.app.SerialSocket
 import com.navguard.app.SerialListener
 import com.navguard.app.SerialService
 import com.navguard.app.ui.theme.*
+import com.navguard.app.ui.components.StatusBar
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -562,147 +563,36 @@ fun EmergencyTerminalScreen(
                 .padding(paddingValues)
                 .statusBarsPadding()
         ) {
-            // Live location banner (non-chat UI)
-            if (isLiveLocationSharing || isReceivingLiveLocation) {
-                // Animated live indicator
-                val pulse = rememberInfiniteTransition(label = "live-indicator").animateFloat(
-                    initialValue = 0.4f,
-                    targetValue = 1f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(durationMillis = 800),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "pulse"
-                )
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .background(Color(0xFF4CAF50).copy(alpha = pulse.value), shape = CircleShape)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = Color(0xFF4CAF50)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Column {
-                            Text(
-                                text = if (isReceivingLiveLocation && !isLiveLocationSharing) {
-                                    if (isNavICSource) "Live location receiving (NavIC)" else "Live location receiving"
-                                } else "Live location sharing",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            // Display sender's coordinates when receiving live location
-                            if (isReceivingLiveLocation && lastLiveLat != null && lastLiveLon != null) {
-                                Text(
-                                    text = "Sender: ${String.format("%.6f", lastLiveLat)}, ${String.format("%.6f", lastLiveLon)}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                    fontFamily = FontFamily.Monospace
-                                )
-                            }
-                        }
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (lastLiveLat != null && lastLiveLon != null) {
-                            TextButton(onClick = { onOpenMapAt(lastLiveLat!!, lastLiveLon!!, isReceivingLiveLocation) }) {
-                                Text("Map")
-                            }
-                            Spacer(modifier = Modifier.width(4.dp))
-                        }
-                        TextButton(onClick = {
-                            isLiveLocationSharing = false
-                            chatManager.setLiveSharingEnabled(deviceAddress, false)
-                            isReceivingLiveLocation = false
-                            chatManager.setLiveReceivingEnabled(deviceAddress, false)
-                            lastLiveLat = null
-                            lastLiveLon = null
-                            locationManager.stopLocationUpdates()
-                            // Notify peer to stop receiving
-                            try {
-                                service?.write("CTRL|LOC_STOP".toByteArray())
-                            } catch (_: Exception) {}
-                            // Stop foreground service sending
-                            LocationService.stopLocationSharing(context)
-                            isNavICSource = false
-                        }) {
-                            Text("Stop", color = Color(0xFFD32F2F))
-                        }
-                    }
+            // Status Bar - Using common component
+            StatusBar(
+                isConnected = isConnected,
+                connectionStatus = connectionStatus,
+                locationText = locationText,
+                isLiveLocationSharing = isLiveLocationSharing,
+                isReceivingLiveLocation = isReceivingLiveLocation,
+                isNavICSource = isNavICSource,
+                lastLiveLat = lastLiveLat,
+                lastLiveLon = lastLiveLon,
+                onMapClick = if (lastLiveLat != null && lastLiveLon != null) {
+                    { onOpenMapAt(lastLiveLat!!, lastLiveLon!!, isReceivingLiveLocation) }
+                } else null,
+                onStopLiveLocation = {
+                    isLiveLocationSharing = false
+                    chatManager.setLiveSharingEnabled(deviceAddress, false)
+                    isReceivingLiveLocation = false
+                    chatManager.setLiveReceivingEnabled(deviceAddress, false)
+                    lastLiveLat = null
+                    lastLiveLon = null
+                    locationManager.stopLocationUpdates()
+                    // Notify peer to stop receiving
+                    try {
+                        service?.write("CTRL|LOC_STOP".toByteArray())
+                    } catch (_: Exception) {}
+                    // Stop foreground service sending
+                    LocationService.stopLocationSharing(context)
+                    isNavICSource = false
                 }
-            }
-            // Compact Status Bar - Fixed to prevent flickering
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp) // Fixed height to prevent layout shifts
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-                    .background(
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
-                        shape = RoundedCornerShape(4.dp)
-                    )
-                    .padding(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Connection status indicator
-                val isConnectedState = isConnected
-                val statusColor = if (isConnectedState) Color(0xFF4CAF50) else Color(0xFFFF5722)
-                
-                Icon(
-                    imageVector = if (isConnectedState) Icons.Default.Send else Icons.Default.Delete,
-                    contentDescription = null,
-                    tint = statusColor,
-                    modifier = Modifier.size(14.dp)
-                )
-                
-                Text(
-                    text = connectionStatus,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 4.dp, end = 8.dp)
-                )
-                
-                // Divider
-                Box(
-                    modifier = Modifier
-                        .height(12.dp)
-                        .width(1.dp)
-                        .background(MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.3f))
-                )
-                
-                // GPS status
-                val hasGps = locationText != "GPS: Not available"
-                Icon(
-                    imageVector = Icons.Default.Info,
-                    contentDescription = null,
-                    tint = if (hasGps) Color(0xFF4CAF50) else Color(0xFFFF9800),
-                    modifier = Modifier
-                        .size(14.dp)
-                        .padding(start = 8.dp)
-                )
-                
-                Text(
-                    text = if (hasGps) locationText.replace("GPS: ", "") else "Awaiting location...",
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(start = 4.dp)
-                )
-            }
+            )
             
             // Messages Area
             LazyColumn(

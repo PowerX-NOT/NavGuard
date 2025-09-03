@@ -17,6 +17,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.navguard.app.ui.screens.DevicesScreen
 import com.navguard.app.ui.screens.EmergencyTerminalScreen
+import com.navguard.app.ui.screens.PrecisionFindingScreen
 import com.navguard.app.ui.theme.NavGuardTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -110,7 +111,8 @@ fun NavGuardApp() {
                 onOpenMap = { navController.navigate("offline_map") },
                 onOpenMapAt = { lat, lon, isLiveLocationFromOther ->
                     navController.navigate("offline_map/$lat/$lon/$isLiveLocationFromOther")
-                }
+                },
+                onOpenPrecisionFinding = { navController.navigate("precision_finding") }
             )
         }
         composable("offline_map") {
@@ -134,6 +136,11 @@ fun NavGuardApp() {
                 onNavigateBack = { navController.popBackStack() },
                 initialCenter = if (lat != null && lon != null) org.mapsforge.core.model.LatLong(lat, lon) else null,
                 isLiveLocationFromOther = isLiveLocationFromOther
+            )
+        }
+        composable("precision_finding") {
+            PrecisionFindingScreen(
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }

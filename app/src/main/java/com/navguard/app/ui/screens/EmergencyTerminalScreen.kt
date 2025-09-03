@@ -99,7 +99,8 @@ fun EmergencyTerminalScreen(
     deviceAddress: String,
     onNavigateBack: () -> Unit,
     onOpenMap: () -> Unit,
-    onOpenMapAt: (Double, Double, Boolean) -> Unit = { _, _, _ -> }
+    onOpenMapAt: (Double, Double, Boolean) -> Unit = { _, _, _ -> },
+    onOpenPrecisionFinding: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var messages by remember { mutableStateOf<List<MessageDisplay>>(emptyList()) }
@@ -120,6 +121,12 @@ fun EmergencyTerminalScreen(
     var lastLiveSentAtMs by remember { mutableStateOf(0L) }
     // Track if live receiving source is ESP32/NavIC (raw LOC|lat|lon)
     var isNavICSource by remember { mutableStateOf(false) }
+    
+    // Signal tracking state
+    var isReceivingSignal by remember { mutableStateOf(false) }
+    var lastSignalRssi by remember { mutableStateOf<String?>(null) }
+    var lastSignalSnr by remember { mutableStateOf<String?>(null) }
+    var lastSignalTime by remember { mutableStateOf(0L) }
     
     // Bluetooth connection state
     var service: SerialService? by remember { mutableStateOf(null) }
@@ -200,6 +207,16 @@ fun EmergencyTerminalScreen(
                     isReceivingLiveLocation = false
                     chatManager.setLiveReceivingEnabled(deviceAddress, false)
                     isNavICSource = false
+                } else if (receivedText.startsWith("SIGNAL|")) {
+                    // Signal message: SIGNAL|SOS from X|RSSI|SNR
+                    val parts = receivedText.trim().split("|")
+                    if (parts.size >= 4) {
+                        lastSignalRssi = parts[2]
+                        lastSignalSnr = parts[3]
+                        isReceivingSignal = true
+                        lastSignalTime = System.currentTimeMillis()
+                        return
+                    }
                 } else if (receivedText.startsWith("LOC|")) {
                     // Raw NavIC live location: LOC|lat|lon
                     val parts = receivedText.trim().split("|")
@@ -253,6 +270,16 @@ fun EmergencyTerminalScreen(
                     isReceivingLiveLocation = false
                     chatManager.setLiveReceivingEnabled(deviceAddress, false)
                     isNavICSource = false
+                } else if (receivedText.startsWith("SIGNAL|")) {
+                    // Signal message: SIGNAL|SOS from X|RSSI|SNR
+                    val parts = receivedText.trim().split("|")
+                    if (parts.size >= 4) {
+                        lastSignalRssi = parts[2]
+                        lastSignalSnr = parts[3]
+                        isReceivingSignal = true
+                        lastSignalTime = System.currentTimeMillis()
+                        return
+                    }
                 } else if (receivedText.startsWith("LOC|")) {
                     // Raw NavIC live location batched
                     val parts = receivedText.trim().split("|")
@@ -419,6 +446,18 @@ fun EmergencyTerminalScreen(
         }
     }
     
+    // Signal timeout mechanism
+    LaunchedEffect(lastSignalTime) {
+        if (lastSignalTime > 0) {
+            delay(5000) // 5 seconds timeout
+            if (System.currentTimeMillis() - lastSignalTime > 5000) {
+                isReceivingSignal = false
+                lastSignalRssi = null
+                lastSignalSnr = null
+            }
+        }
+    }
+    
     // Cleanup on dispose
     DisposableEffect(Unit) {
         onDispose {
@@ -573,6 +612,9 @@ fun EmergencyTerminalScreen(
                 isNavICSource = isNavICSource,
                 lastLiveLat = lastLiveLat,
                 lastLiveLon = lastLiveLon,
+                isReceivingSignal = isReceivingSignal,
+                lastSignalRssi = lastSignalRssi,
+                lastSignalSnr = lastSignalSnr,
                 onMapClick = if (lastLiveLat != null && lastLiveLon != null) {
                     { onOpenMapAt(lastLiveLat!!, lastLiveLon!!, isReceivingLiveLocation) }
                 } else null,
@@ -591,7 +633,10 @@ fun EmergencyTerminalScreen(
                     // Stop foreground service sending
                     LocationService.stopLocationSharing(context)
                     isNavICSource = false
-                }
+                },
+                onTrackSignal = if (isReceivingSignal) {
+                    { onOpenPrecisionFinding() }
+                } else null
             )
             
             // Messages Area

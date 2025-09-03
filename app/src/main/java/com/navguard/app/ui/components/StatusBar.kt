@@ -14,6 +14,8 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Send
+import androidx.compose.material.icons.filled.Radar
+import androidx.compose.material.icons.filled.SignalWifi4Bar
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,14 +44,29 @@ fun StatusBar(
     isNavICSource: Boolean = false,
     lastLiveLat: Double? = null,
     lastLiveLon: Double? = null,
+    // Signal tracking
+    isReceivingSignal: Boolean = false,
+    lastSignalRssi: String? = null,
+    lastSignalSnr: String? = null,
     // Actions
     onMapClick: (() -> Unit)? = null,
     onStopLiveLocation: (() -> Unit)? = null,
+    onTrackSignal: (() -> Unit)? = null,
     // Display options
     showCompactStatus: Boolean = true,
-    showLiveBanner: Boolean = true
+    showLiveBanner: Boolean = true,
+    showSignalBanner: Boolean = true
 ) {
     Column(modifier = modifier) {
+        // Signal receiving banner
+        if (showSignalBanner && isReceivingSignal) {
+            SignalReceivingBanner(
+                lastSignalRssi = lastSignalRssi,
+                lastSignalSnr = lastSignalSnr,
+                onTrackSignal = onTrackSignal
+            )
+        }
+        
         // Live location banner
         if (showLiveBanner && (isLiveLocationSharing || isReceivingLiveLocation)) {
             LiveLocationBanner(
@@ -70,6 +87,84 @@ fun StatusBar(
                 connectionStatus = connectionStatus,
                 locationText = locationText
             )
+        }
+    }
+}
+
+@Composable
+private fun SignalReceivingBanner(
+    lastSignalRssi: String?,
+    lastSignalSnr: String?,
+    onTrackSignal: (() -> Unit)?
+) {
+    // Animated signal indicator
+    val pulse = rememberInfiniteTransition(label = "signal-indicator").animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse"
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .background(
+                color = Color(0xFFFF5722).copy(alpha = 0.1f),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(12.dp)
+                    .background(Color(0xFFFF5722).copy(alpha = pulse.value), shape = CircleShape)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Icon(
+                imageVector = Icons.Default.SignalWifi4Bar,
+                contentDescription = null,
+                tint = Color(0xFFFF5722)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Column {
+                Text(
+                    text = "Signal is receiving",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium
+                )
+                if (lastSignalRssi != null && lastSignalSnr != null) {
+                    Text(
+                        text = "RSSI: ${lastSignalRssi}dBm • SNR: ${lastSignalSnr}dB",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        }
+        if (onTrackSignal != null) {
+            TextButton(
+                onClick = onTrackSignal,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = Color(0xFFFF5722)
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Radar,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Track")
+            }
         }
     }
 }
@@ -251,6 +346,30 @@ object StatusBarUtils {
                     append(formatDistanceShort(distanceMeters))
                 }
             }
+        }
+    }
+    
+    fun getSignalStrength(rssi: String?): String {
+        return when {
+            rssi == null -> "Unknown"
+            rssi.toIntOrNull() == null -> "Invalid"
+            rssi.toInt() >= -50 -> "Excellent"
+            rssi.toInt() >= -70 -> "Good"
+            rssi.toInt() >= -85 -> "Fair"
+            rssi.toInt() >= -100 -> "Poor"
+            else -> "Very Poor"
+        }
+    }
+    
+    fun getSignalQuality(snr: String?): String {
+        return when {
+            snr == null -> "Unknown"
+            snr.toIntOrNull() == null -> "Invalid"
+            snr.toInt() >= 10 -> "Excellent"
+            snr.toInt() >= 5 -> "Good"
+            snr.toInt() >= 0 -> "Fair"
+            snr.toInt() >= -5 -> "Poor"
+            else -> "Very Poor"
         }
     }
 }

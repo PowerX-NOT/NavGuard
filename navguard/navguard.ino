@@ -17,6 +17,8 @@ TinyGPSPlus gps;
 #define GPS_TX_PIN  22   // GPS RX ← ESP32 TX (Green wire)
 // Button input (active low, uses internal pull-up) — wired to GPIO27 -> GND
 #define BUTTON_PIN  27
+// Flash button (GPIO0) for signal sending
+#define FLASH_BUTTON_PIN  0
 //tx=green
 
 // Live location state
@@ -24,14 +26,24 @@ bool liveEnabled = false;
 unsigned long lastLiveSendMs = 0;
 const unsigned long liveIntervalMs = 2000;
 
+// Signal sending state
+bool signalEnabled = false;
+unsigned long lastSignalSendMs = 0;
+const unsigned long signalIntervalMs = 1000; // Send signal every 1 second
+
 // Button handling state
-bool btnPrev = HIGH;             // because of INPUT_PULLUP
+bool btnPrev = HIGH;             // Button state tracking
 unsigned long pressStartMs = 0;
-bool longPressFired = false;
-unsigned long lastReleaseMs = 0;
-uint8_t tapCount = 0;
 const unsigned long longPressMs = 3000;
-const unsigned long doubleTapWindowMs = 400;  // double press gap
+bool longPressFired = false;
+int tapCount = 0;
+unsigned long lastReleaseMs = 0;
+const unsigned long doubleTapWindowMs = 500;
+bool singleTapPending = false;
+
+// Flash button state tracking
+bool flashBtnPrev = HIGH;
+bool flashPressed = false;
 
 // ⚙️ Device Config — change per device
 String myAddress = "2";         // A = "1", B = "2"
@@ -51,8 +63,10 @@ void setup() {
   pinMode(BLUE_LED, OUTPUT);
   digitalWrite(BLUE_LED, LOW);
 
-  // Button input
+  // Set up button pin with internal pull-up
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+  // Set up flash button pin with internal pull-up
+  pinMode(FLASH_BUTTON_PIN, INPUT_PULLUP);
 
   delay(500);
   Serial.println("🛠️ Configuring RYLR998...");
@@ -71,9 +85,31 @@ void loop() {
     gps.encode(GPSSerial.read());
   }
 
-  // ---- Button handling (active low) ----
-  bool btnNow = digitalRead(BUTTON_PIN);
+  // ---- Flash button handling for signal sending ----
+  bool flashBtnNow = digitalRead(FLASH_BUTTON_PIN);
   unsigned long nowMs = millis();
+  
+  // Flash button press detection (active low)
+  if (flashBtnPrev == HIGH && flashBtnNow == LOW && !flashPressed) {
+    // Flash button pressed → toggle signal sending
+    signalEnabled = !signalEnabled;
+    flashPressed = true;
+    if (signalEnabled) {
+      Serial.println("📡 Signal sending started (Flash button)");
+      longBeep(); // long feedback beep
+      blinkLED(); // LED feedback
+    } else {
+      Serial.println("🛑 Signal sending stopped (Flash button)");
+      miniBeep(); // short feedback beep
+    }
+  } else if (flashBtnPrev == LOW && flashBtnNow == HIGH) {
+    // Flash button released
+    flashPressed = false;
+  }
+  flashBtnPrev = flashBtnNow;
+  
+  // ---- Main button handling (active low) ----
+  bool btnNow = digitalRead(BUTTON_PIN);
   // Rising/falling edge detection
   if (btnPrev == HIGH && btnNow == LOW) {
     // Press started
@@ -87,20 +123,25 @@ void loop() {
       tapCount++;
       if (tapCount == 1) {
         lastReleaseMs = nowMs;
+        singleTapPending = true;
       } else if (tapCount == 2) {
-        // Double press → stop live
+        // Double press → stop live/signal
         liveEnabled = false;
+        signalEnabled = false;
         tapCount = 0;
+        singleTapPending = false;
         doubleBeep(); // 2 beeps feedback
+        Serial.println("🛑 Live location and signal sending stopped");
       }
     }
   } else {
     // While held, check long-press
     if (btnNow == LOW && !longPressFired && (nowMs - pressStartMs >= longPressMs)) {
-      // Long press → start live sending
+      // Long press → start live location
       liveEnabled = true;
       longPressFired = true;
       tapCount = 0;
+      singleTapPending = false;
       // Print NavIC banner when starting live
       Serial.println("\n\n\n**********************************************************************************");
       Serial.println("  Bharat Pi NavIC Shield Test Program");
@@ -114,9 +155,10 @@ void loop() {
       blinkLED(); // LED feedback
     }
     // Handle tap timeout window
-    if (tapCount == 1 && (nowMs - lastReleaseMs > doubleTapWindowMs)) {
-      // Single tap timeout passed; ignore single tap action (no-op)
+    if (tapCount == 1 && (nowMs - lastReleaseMs > doubleTapWindowMs) && !longPressFired) {
+      // Single tap timeout passed
       tapCount = 0;
+      singleTapPending = false;
     }
   }
   btnPrev = btnNow;
@@ -131,6 +173,18 @@ void loop() {
       String cmd = String("AT+SEND=") + targetAddress + "," + String(payload.length()) + "," + payload + "\r\n";
       LoRaSerial.print(cmd);
       Serial.println("📡 Sent LIVE: " + payload);
+      miniBeep(); // small tick on each send
+    }
+  }
+  
+  // ---- Signal sending ----
+  if (signalEnabled) {
+    if (nowMs - lastSignalSendMs >= signalIntervalMs) {
+      lastSignalSendMs = nowMs;
+      String signalPayload = String("SOS from ") + myAddress;
+      String cmd = String("AT+SEND=") + targetAddress + "," + String(signalPayload.length()) + "," + signalPayload + "\r\n";
+      LoRaSerial.print(cmd);
+      Serial.println("🚨 Sent SIGNAL: " + signalPayload);
       miniBeep(); // small tick on each send
     }
   }
@@ -194,7 +248,22 @@ void loop() {
 
       if (thirdComma > 0) {
         String message = raw.substring(secondComma + 1, thirdComma);
-        Serial.println("📥 Message: " + message);
+        String rssi = "";
+        String snr = "";
+        
+        // Extract RSSI and SNR from the raw response
+        int fourthComma = raw.indexOf(',', thirdComma + 1);
+        if (fourthComma > 0) {
+          rssi = raw.substring(thirdComma + 1, fourthComma);
+          int fifthComma = raw.indexOf(',', fourthComma + 1);
+          if (fifthComma > 0) {
+            snr = raw.substring(fourthComma + 1, fifthComma);
+          } else {
+            snr = raw.substring(fourthComma + 1);
+          }
+        }
+        
+        Serial.println("📥 Message: " + message + " | RSSI=" + rssi + " | SNR=" + snr);
 
         blinkLED();  // Blink blue LED once
 
@@ -207,29 +276,38 @@ void loop() {
             Serial.println("📲 Sent ACK to Bluetooth");
           }
         } else {
-          // Regular message - ensure compact format before forwarding to Bluetooth
+          // Check if this is a signal message and format with RSSI/SNR
           String out = message;
-          int pc = 0;
-          for (int i = 0; i < message.length(); i++) if (message.charAt(i) == '|') pc++;
-          if (pc == 6) {
-            int p1 = message.indexOf('|');
-            int p2 = message.indexOf('|', p1 + 1);
-            int p3 = message.indexOf('|', p2 + 1);
-            int p4 = message.indexOf('|', p3 + 1);
-            int p5 = message.indexOf('|', p4 + 1);
-            int p6 = message.indexOf('|', p5 + 1);
-            int p7 = message.indexOf('|', p6 + 1);
-            if (p7 == -1) {
-              out = message.substring(0, p4) + String("|") + message.substring(p5 + 1);
+          if (message.startsWith("SOS from") && rssi != "" && snr != "") {
+            // Format: SIGNAL|SOS from X|RSSI|SNR
+            out = String("SIGNAL|") + message + "|" + rssi + "|" + snr;
+          } else {
+            // Regular message - ensure compact format before forwarding to Bluetooth
+            int pc = 0;
+            for (int i = 0; i < message.length(); i++) if (message.charAt(i) == '|') pc++;
+            if (pc == 6) {
+              int p1 = message.indexOf('|');
+              int p2 = message.indexOf('|', p1 + 1);
+              int p3 = message.indexOf('|', p2 + 1);
+              int p4 = message.indexOf('|', p3 + 1);
+              int p5 = message.indexOf('|', p4 + 1);
+              int p6 = message.indexOf('|', p5 + 1);
+              int p7 = message.indexOf('|', p6 + 1);
+              if (p7 == -1) {
+                out = message.substring(0, p4) + String("|") + message.substring(p5 + 1);
+              }
             }
           }
+          
           if (BT.hasClient()) {
             BT.print(out);
             BT.print("\r\n");
             Serial.println("📲 Sent message to Bluetooth");
             
-            // Send acknowledgment for received message
-            sendAcknowledgment(out);
+            // Send acknowledgment for received message (only for non-signal messages)
+            if (!message.startsWith("SOS from")) {
+              sendAcknowledgment(out);
+            }
           } else {
             ringBuzzer();
           }
